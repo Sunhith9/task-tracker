@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task & Expense Tracker</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const Trash2 = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const Edit2 = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+        const Check = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+
+        const TaskExpenseTracker = () => {
+          const [tasks, setTasks] = useState(() => {
+            const saved = localStorage.getItem('tasks');
+            return saved ? JSON.parse(saved) : [];
+          });
+          const [expenses, setExpenses] = useState(() => {
+            const saved = localStorage.getItem('expenses');
+            return saved ? JSON.parse(saved) : [];
+          });
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [editingTask, setEditingTask] = useState(null);
+          const [editingExpense, setEditingExpense] = useState(null);
+
+          // Save tasks to localStorage whenever they change
+          useEffect(() => {
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+          }, [tasks]);
+
+          // Save expenses to localStorage whenever they change
+          useEffect(() => {
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+          }, [expenses]);
+
+          // Task form state
+          const [taskForm, setTaskForm] = useState({
+            title: '',
+            priority: 'medium',
+            dueDate: '',
+            category: 'personal',
+            status: 'pending',
+            linkedExpenseId: null
+          });
+
+          // Expense form state
+          const [expenseForm, setExpenseForm] = useState({
+            amount: '',
+            category: 'personal',
+            date: new Date().toISOString().split('T')[0],
+            note: '',
+            linkedTaskId: null
+          });
+
+          const categories = ['work', 'personal', 'shopping', 'bills'];
+          const priorities = ['low', 'medium', 'high'];
+
+          // Add/Update Task
+          const handleTaskSubmit = (e) => {
+            e.preventDefault();
+            console.log("=== TASK SUBMIT TRIGGERED ===");
+            console.log("Form data:", taskForm);
+
+            if (!taskForm.title.trim()) {
+              alert("Please enter a task title");
+              return;
+            }
+
+            const newTaskData = {
+              ...taskForm,
+              id: editingTask ? editingTask.id : Date.now().toString(),
+            };
+
+            if (editingTask) {
+              setTasks(prev =>
+                prev.map(t => (t.id === editingTask.id ? newTaskData : t))
+              );
+              setEditingTask(null);
+            } else {
+              setTasks(prev => [...prev, newTaskData]);
+              console.log("Task added successfully!");
+            }
+
+            // Reset form
+            setTaskForm({
+              title: '',
+              priority: 'medium',
+              dueDate: '',
+              category: 'personal',
+              status: 'pending',
+              linkedExpenseId: null
+            });
+          };
+
+          // Add/Update Expense
+          const handleExpenseSubmit = (e) => {
+            e.preventDefault();
+            if (!expenseForm.amount || parseFloat(expenseForm.amount) <= 0) return;
+
+            if (editingExpense) {
+              setExpenses(expenses.map(exp =>
+                exp.id === editingExpense.id ? { ...expenseForm, id: editingExpense.id, amount: parseFloat(expenseForm.amount) } : exp
+              ));
+              setEditingExpense(null);
+            } else {
+              const newExpense = {
+                ...expenseForm,
+                id: Date.now().toString(),
+                amount: parseFloat(expenseForm.amount)
+              };
+              setExpenses([...expenses, newExpense]);
+            }
+
+            setExpenseForm({
+              amount: '',
+              category: 'personal',
+              date: new Date().toISOString().split('T')[0],
+              note: '',
+              linkedTaskId: null
+            });
+          };
+
+          // Delete task + unlink expense
+          const deleteTask = (id) => {
+            setTasks(tasks.filter(t => t.id !== id));
+            setExpenses(expenses.map(e => e.linkedTaskId === id ? { ...e, linkedTaskId: null } : e));
+          };
+
+          // Delete expense + unlink task
+          const deleteExpense = (id) => {
+            setExpenses(expenses.filter(e => e.id !== id));
+            setTasks(tasks.map(t => t.linkedExpenseId === id ? { ...t, linkedExpenseId: null } : t));
+          };
+
+          // Toggle task completion
+          const toggleTaskStatus = (id) => {
+            setTasks(tasks.map(t =>
+              t.id === id ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t
+            ));
+          };
+
+          // Dashboard calculations
+          const today = new Date().toISOString().split('T')[0];
+          const currentMonth = new Date().toISOString().slice(0, 7);
+
+          const todayExpenses = expenses.filter(e => e.date === today).reduce((sum, e) => sum + e.amount, 0);
+          const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth)).reduce((sum, e) => sum + e.amount, 0);
+
+          const expensesByCategory = categories.map(cat => ({
+            category: cat,
+            total: expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0)
+          }));
+
+          const todayTasks = tasks.filter(t => t.dueDate === today);
+          const completedTasks = tasks.filter(t => t.status === 'completed').length;
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+              <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">💰 Task & Expense Tracker</h1>
+                  <p className="text-gray-600">Track what you do and what it costs</p>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mb-6">
+                  {['dashboard', 'tasks', 'expenses'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === tab
+                          ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* DASHBOARD TAB */}
+                {activeTab === 'dashboard' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-green-500">
+                        <p className="text-gray-600 text-sm mb-1">Today's Expenses</p>
+                        <p className="text-3xl font-bold text-gray-800">₹{todayExpenses.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-blue-500">
+                        <p className="text-gray-600 text-sm mb-1">Month's Expenses</p>
+                        <p className="text-3xl font-bold text-gray-800">₹{monthExpenses.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-purple-500">
+                        <p className="text-gray-600 text-sm mb-1">Total Tasks</p>
+                        <p className="text-3xl font-bold text-gray-800">{tasks.length}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-orange-500">
+                        <p className="text-gray-600 text-sm mb-1">Completed</p>
+                        <p className="text-3xl font-bold text-gray-800">{completedTasks}</p>
+                      </div>
+                    </div>
+
+                    {/* Expenses by Category */}
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">📊 Expenses by Category</h2>
+                      <div className="space-y-3">
+                        {expensesByCategory.map(item => (
+                          <div key={item.category} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span className="capitalize font-medium text-gray-700">{item.category}</span>
+                            <span className="font-bold text-indigo-600">₹{item.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Today's Tasks */}
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Today's Tasks ({todayTasks.length})</h2>
+                      {todayTasks.length > 0 ? (
+                        <div className="space-y-3">
+                          {todayTasks.map(task => (
+                            <div key={task.id} className="p-4 border border-gray-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="font-semibold text-gray-800">{task.title}</h3>
+                                  <div className="flex gap-2 mt-1">
+                                    <span className={`px-2 py-1 rounded text-xs ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-green-100 text-green-700'
+                                      }`}>
+                                      {task.priority}
+                                    </span>
+                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
+                                      {task.category}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => toggleTaskStatus(task.id)}
+                                  className={`px-4 py-2 rounded-lg font-medium ${task.status === 'completed'
+                                      ? 'bg-green-500 text-white'
+                                      : 'bg-gray-200 text-gray-700'
+                                    }`}
+                                >
+                                  {task.status === 'completed' ? '✓ Done' : 'Pending'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-gray-500 py-8">No tasks due today</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TASKS TAB */}
+                {activeTab === 'tasks' && (
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Task Form */}
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">
+                        {editingTask ? '✏️ Edit Task' : '➕ Add Task'}
+                      </h2>
+                      <form onSubmit={handleTaskSubmit} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Task Title *</label>
+                          <input
+                            type="text"
+                            value={taskForm.title}
+                            onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            placeholder="e.g., Buy groceries"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                            <select
+                              value={taskForm.priority}
+                              onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {priorities.map(p => (
+                                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select
+                              value={taskForm.category}
+                              onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {categories.map(c => (
+                                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                          <input
+                            type="date"
+                            value={taskForm.dueDate}
+                            onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Link to Expense (Optional)</label>
+                          <select
+                            value={taskForm.linkedExpenseId || ''}
+                            onChange={(e) => setTaskForm({ ...taskForm, linkedExpenseId: e.target.value || null })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">No expense linked</option>
+                            {expenses
+                              .filter(e => !e.linkedTaskId || e.id === taskForm.linkedExpenseId)
+                              .map(e => (
+                                <option key={e.id} value={e.id}>
+                                  ₹{e.amount.toFixed(2)} - {e.note || e.category} ({e.date})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                          >
+                            {editingTask ? 'Update Task' : 'Add Task'}
+                          </button>
+                          {editingTask && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingTask(null);
+                                setTaskForm({
+                                  title: '',
+                                  priority: 'medium',
+                                  dueDate: '',
+                                  category: 'personal',
+                                  status: 'pending',
+                                  linkedExpenseId: null
+                                });
+                              }}
+                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Task List */}
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">
+                        📋 All Tasks ({tasks.length})
+                      </h2>
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                        {tasks.map(task => {
+                          const linkedExpense = expenses.find(e => e.id === task.linkedExpenseId);
+                          return (
+                            <div key={task.id} className={`border rounded-lg p-4 transition-all ${task.status === 'completed'
+                                ? 'bg-green-50 border-green-200'
+                                : 'border-gray-200 hover:shadow-md'
+                              }`}>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <button
+                                      onClick={() => toggleTaskStatus(task.id)}
+                                      className={`w-5 h-5 rounded border-2 flex items-center justify-center ${task.status === 'completed'
+                                          ? 'bg-green-500 border-green-500'
+                                          : 'border-gray-300 hover:border-green-500'
+                                        }`}
+                                    >
+                                      {task.status === 'completed' && <Check />}
+                                    </button>
+                                    <h3 className={`font-semibold ${task.status === 'completed'
+                                        ? 'line-through text-gray-500'
+                                        : 'text-gray-800'
+                                      }`}>
+                                      {task.title}
+                                    </h3>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 ml-7">
+                                    <span className={`px-2 py-1 rounded text-xs ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-green-100 text-green-700'
+                                      }`}>
+                                      {task.priority}
+                                    </span>
+                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
+                                      {task.category}
+                                    </span>
+                                    {task.dueDate && (
+                                      <span className="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700">
+                                        📅 {task.dueDate}
+                                      </span>
+                                    )}
+                                    {linkedExpense && (
+                                      <span className="px-2 py-1 rounded text-xs bg-orange-100 text-orange-700">
+                                        💰 ₹{linkedExpense.amount.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingTask(task);
+                                      setTaskForm(task);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800"
+                                  >
+                                    <Edit2 />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteTask(task.id)}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {tasks.length === 0 && (
+                          <p className="text-center text-gray-500 py-8">No tasks yet. Add your first task!</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* EXPENSES TAB */}
+                {activeTab === 'expenses' && (
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">
+                        {editingExpense ? '✏️ Edit Expense' : '➕ Add Expense'}
+                      </h2>
+                      <form onSubmit={handleExpenseSubmit} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹) *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={expenseForm.amount}
+                            onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            placeholder="0.00"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+                          <input
+                            type="text"
+                            value={expenseForm.note}
+                            onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            placeholder="e.g., Groceries at Walmart"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select
+                              value={expenseForm.category}
+                              onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {categories.map(c => (
+                                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                            <input
+                              type="date"
+                              value={expenseForm.date}
+                              onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Link to Task (Optional)</label>
+                          <select
+                            value={expenseForm.linkedTaskId || ''}
+                            onChange={(e) => setExpenseForm({ ...expenseForm, linkedTaskId: e.target.value || null })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">No task linked</option>
+                            {tasks
+                              .filter(t => !t.linkedExpenseId || t.id === expenseForm.linkedTaskId)
+                              .map(t => (
+                                <option key={t.id} value={t.id}>
+                                  {t.title} ({t.category})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                          >
+                            {editingExpense ? 'Update Expense' : 'Add Expense'}
+                          </button>
+                          {editingExpense && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingExpense(null);
+                                setExpenseForm({
+                                  amount: '',
+                                  category: 'personal',
+                                  date: new Date().toISOString().split('T')[0],
+                                  note: '',
+                                  linkedTaskId: null
+                                });
+                              }}
+                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">
+                        💳 All Expenses ({expenses.length})
+                      </h2>
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                        {expenses.map(expense => {
+                          const linkedTask = tasks.find(t => t.id === expense.linkedTaskId);
+                          return (
+                            <div key={expense.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h3 className="font-semibold text-gray-800">{expense.note || 'Expense'}</h3>
+                                    <span className="text-xl font-bold text-green-600">₹{expense.amount.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
+                                      {expense.category}
+                                    </span>
+                                    <span className="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700">
+                                      📅 {expense.date}
+                                    </span>
+                                    {linkedTask && (
+                                      <span className="px-2 py-1 rounded text-xs bg-orange-100 text-orange-700">
+                                        📋 {linkedTask.title}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 ml-4">
+                                  <button
+                                    onClick={() => {
+                                      setEditingExpense(expense);
+                                      setExpenseForm(expense);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800"
+                                  >
+                                    <Edit2 />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteExpense(expense.id)}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <Trash2 />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {expenses.length === 0 && (
+                          <p className="text-center text-gray-500 py-8">No expenses yet. Add your first expense!</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TaskExpenseTracker />);
+    </script>
+</body>
+</html>
