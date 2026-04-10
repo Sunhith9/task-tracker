@@ -1,773 +1,699 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task & Expense Tracker</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div id="root"></div>
-    
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
-        const Trash2 = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
-        const Edit2 = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
-        const Check = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>;
-        const TrendingUp = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>;
-        const TrendingDown = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>;
+import { useState, useEffect, useCallback } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
-        const TaskExpenseTracker = () => {
-          const [tasks, setTasks] = useState(() => {
-            const saved = localStorage.getItem('tasks');
-            return saved ? JSON.parse(saved) : [];
-          });
-          const [expenses, setExpenses] = useState(() => {
-            const saved = localStorage.getItem('expenses');
-            return saved ? JSON.parse(saved) : [];
-          });
-          const [activeTab, setActiveTab] = useState('dashboard');
-          const [editingTask, setEditingTask] = useState(null);
-          const [editingExpense, setEditingExpense] = useState(null);
+const CATEGORIES = ['work','personal','shopping','bills','food','health'];
+const PRIORITIES = ['low','medium','high'];
+const CAT_COLORS = { work:'#2a7dd4', personal:'#2a9d5c', shopping:'#d4a02a', bills:'#d42a2a', food:'#d4622a', health:'#7a2ad4' };
+const CAT_BG = { work:'#e0eef5', personal:'#e0f5ea', shopping:'#fef3d8', bills:'#fde8e8', food:'#fdf0e0', health:'#ede0f5' };
+const CAT_ICONS = { food:'🍽️', bills:'📄', shopping:'🛍️', work:'💼', health:'💊', personal:'👤' };
+const INC_SOURCES = ['salary','freelance','business','investment','gift','other'];
 
-          const monthlyChartRef = useRef(null);
-          const categoryChartRef = useRef(null);
-          const monthlyChartInstance = useRef(null);
-          const categoryChartInstance = useRef(null);
+const fmt = n => '₹' + (n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const today = () => new Date().toISOString().split('T')[0];
+const monthKey = d => d.slice(0,7);
+const monthLabel = ym => { const [y,m] = ym.split('-'); return new Date(+y,+m-1,1).toLocaleDateString('en-IN',{month:'short',year:'numeric'}); };
 
-          useEffect(() => {
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-          }, [tasks]);
+const styles = `
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',system-ui,sans-serif;background:#f5f4f0;color:#1a1814;min-height:100vh}
+  input,select{font-family:inherit;background:#f0ede8;border:1.5px solid #e2ddd6;border-radius:8px;padding:9px 13px;color:#1a1814;font-size:13px;width:100%;outline:none;transition:border-color .15s}
+  input:focus,select:focus{border-color:#d4622a;background:#fff}
+  label{font-size:11px;font-weight:700;color:#6b6560;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
+  ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#f0ede8}::-webkit-scrollbar-thumb{background:#e2ddd6;border-radius:3px}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+`;
 
-          useEffect(() => {
-            localStorage.setItem('expenses', JSON.stringify(expenses));
-          }, [expenses]);
+const Btn = ({ children, onClick, variant='primary', size='md', disabled, style={} }) => {
+  const base = { display:'inline-flex', alignItems:'center', gap:5, borderRadius:8, fontWeight:600, fontFamily:'inherit', cursor: disabled?'default':'pointer', border:'none', transition:'all .15s', fontSize: size==='sm'?12:14, padding: size==='sm'?'5px 11px':'9px 17px', opacity: disabled?.5:1 };
+  const variants = {
+    primary:   { background:'#d4622a', color:'#fff' },
+    secondary: { background:'#f0ede8', color:'#6b6560', border:'1.5px solid #e2ddd6' },
+    danger:    { background:'#fde8e8', color:'#d42a2a' },
+    success:   { background:'#e0f5ea', color:'#2a9d5c' },
+    green:     { background:'#2a9d5c', color:'#fff' },
+  };
+  return <button style={{...base,...variants[variant],...style}} onClick={onClick} disabled={disabled}>{children}</button>;
+};
 
-          const [taskForm, setTaskForm] = useState({
-            title: '',
-            priority: 'medium',
-            dueDate: '',
-            category: 'personal',
-            status: 'pending',
-            linkedExpenseId: null
-          });
+const Tag = ({ children, type='gray' }) => {
+  const map = { high:'#fde8e8:#d42a2a', medium:'#fef3d8:#d4a02a', low:'#e0f5ea:#2a9d5c', blue:'#e0eef5:#2a7dd4', purple:'#ede0f5:#7a2ad4', orange:'#fdf0e0:#d4622a', gray:'#f0ede8:#6b6560' };
+  const [bg, color] = (map[type]||map.gray).split(':');
+  return <span style={{display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:20,fontSize:11,fontWeight:700,letterSpacing:'.02em',background:bg,color,whiteSpace:'nowrap'}}>{children}</span>;
+};
 
-          const [expenseForm, setExpenseForm] = useState({
-            amount: '',
-            category: 'personal',
-            date: new Date().toISOString().split('T')[0],
-            note: '',
-            linkedTaskId: null
-          });
+const Card = ({ children, style={} }) => (
+  <div style={{background:'#fff',borderRadius:14,border:'1.5px solid #e2ddd6',boxShadow:'0 2px 12px rgba(0,0,0,.06)',...style}}>{children}</div>
+);
 
-          const categories = ['work', 'personal', 'shopping', 'bills'];
-          const priorities = ['low', 'medium', 'high'];
+const StatCard = ({ label, value, accent, sub }) => (
+  <div style={{background:'#fff',borderRadius:12,padding:'18px 20px',border:'1.5px solid #e2ddd6',borderTop:`3px solid ${accent}`}}>
+    <div style={{fontSize:11,fontWeight:700,color:'#6b6560',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:7}}>{label}</div>
+    <div style={{fontFamily:'DM Mono,monospace',fontSize:26,fontWeight:500,color:'#1a1814'}}>{value}</div>
+    {sub && <div style={{marginTop:5}}>{sub}</div>}
+  </div>
+);
 
-          const handleTaskSubmit = (e) => {
-            e.preventDefault();
+const Checkbox = ({ checked, onClick, size=18 }) => (
+  <div onClick={onClick} style={{width:size,height:size,borderRadius:5,border:`2px solid ${checked?'#2a9d5c':'#e2ddd6'}`,background:checked?'#2a9d5c':'#fff',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,transition:'all .15s'}}>
+    {checked && <svg width={size-6} height={size-6} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+  </div>
+);
 
-            if (!taskForm.title.trim()) {
-              alert("Please enter a task title");
-              return;
-            }
+// ── Dashboard ────────────────────────────────────────────────────────────────
+const Dashboard = ({ tasks, expenses, income, budgets, setActiveTab }) => {
+  const tod = today();
+  const cur = monthKey(tod);
+  const lastM = monthKey(new Date(new Date().setMonth(new Date().getMonth()-1)).toISOString());
 
-            const newTaskData = {
-              ...taskForm,
-              id: editingTask ? editingTask.id : Date.now().toString(),
-            };
+  const todayExp   = expenses.filter(e=>e.date===tod).reduce((s,e)=>s+e.amount,0);
+  const curMonExp  = expenses.filter(e=>monthKey(e.date)===cur).reduce((s,e)=>s+e.amount,0);
+  const lastMonExp = expenses.filter(e=>monthKey(e.date)===lastM).reduce((s,e)=>s+e.amount,0);
+  const curMonInc  = income.filter(i=>monthKey(i.date)===cur).reduce((s,i)=>s+i.amount,0);
+  const netSavings = curMonInc - curMonExp;
+  const diff = lastMonExp>0 ? ((curMonExp-lastMonExp)/lastMonExp*100).toFixed(1) : null;
+  const completedTasks = tasks.filter(t=>t.status==='completed').length;
+  const overdueTasks   = tasks.filter(t=>t.status!=='completed'&&t.dueDate&&t.dueDate<tod).length;
+  const todayTasks     = tasks.filter(t=>t.dueDate===tod);
 
-            if (editingTask) {
-              setTasks(prev =>
-                prev.map(t => (t.id === editingTask.id ? newTaskData : t))
-              );
-              setEditingTask(null);
-            } else {
-              setTasks(prev => [...prev, newTaskData]);
-            }
+  const months6 = Array.from({length:6},(_,i)=>{
+    const d = new Date(new Date().getFullYear(), new Date().getMonth()-5+i, 1);
+    const mk = d.toISOString().slice(0,7);
+    return { name: d.toLocaleDateString('en-IN',{month:'short'}), total: expenses.filter(e=>e.date.startsWith(mk)).reduce((s,e)=>s+e.amount,0) };
+  });
 
-            setTaskForm({
-              title: '',
-              priority: 'medium',
-              dueDate: '',
-              category: 'personal',
-              status: 'pending',
-              linkedExpenseId: null
-            });
-          };
+  const catData = CATEGORIES.map(c=>({name:c.charAt(0).toUpperCase()+c.slice(1), value:expenses.filter(e=>monthKey(e.date)===cur&&e.category===c).reduce((s,e)=>s+e.amount,0), color:CAT_COLORS[c]})).filter(x=>x.value>0);
 
-          const handleExpenseSubmit = (e) => {
-            e.preventDefault();
-            if (!expenseForm.amount || parseFloat(expenseForm.amount) <= 0) return;
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:18}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:13}}>
+        <StatCard label="Today's Spend" value={fmt(todayExp)} accent="#d4622a" />
+        <StatCard label="This Month" value={fmt(curMonExp)} accent="#2a7dd4"
+          sub={diff!=null?<span style={{display:'flex',alignItems:'center',gap:4,fontSize:12,color:+diff>0?'#d42a2a':'#2a9d5c'}}>{+diff>0?'↑':'↓'} {Math.abs(diff)}% vs last month</span>:null} />
+        <StatCard label="Income" value={fmt(curMonInc)} accent="#2a9d5c" />
+        <StatCard label="Net Savings" value={fmt(netSavings)} accent={netSavings>=0?'#2a9d5c':'#d42a2a'}
+          sub={<span style={{fontSize:12,color:'#6b6560'}}>{netSavings>=0?'🎉 On track':'⚠️ Over income'}</span>} />
+        <StatCard label="Tasks Done" value={`${completedTasks}/${tasks.length}`} accent="#7a2ad4"
+          sub={overdueTasks>0?<span style={{fontSize:12,color:'#d42a2a'}}>⚠️ {overdueTasks} overdue</span>:null} />
+      </div>
 
-            if (editingExpense) {
-              setExpenses(expenses.map(exp =>
-                exp.id === editingExpense.id ? { ...expenseForm, id: editingExpense.id, amount: parseFloat(expenseForm.amount) } : exp
-              ));
-              setEditingExpense(null);
-            } else {
-              const newExpense = {
-                ...expenseForm,
-                id: Date.now().toString(),
-                amount: parseFloat(expenseForm.amount)
-              };
-              setExpenses([...expenses, newExpense]);
-            }
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:18}}>
+        <Card style={{padding:20}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📈 6-Month Expense Trend</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={months6}>
+              <XAxis dataKey="name" tick={{fontSize:11}} axisLine={false} tickLine={false} />
+              <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false} tickFormatter={v=>'₹'+v.toLocaleString('en-IN')} width={70} />
+              <Tooltip formatter={v=>fmt(v)} labelStyle={{fontSize:12}} contentStyle={{borderRadius:8,fontSize:12}} />
+              <Line type="monotone" dataKey="total" stroke="#d4622a" strokeWidth={2.5} dot={{fill:'#d4622a',r:4}} activeDot={{r:6}} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card style={{padding:20}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🎯 This Month by Category</div>
+          {catData.length>0
+            ? <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={catData} cx="50%" cy="45%" innerRadius={50} outerRadius={75} dataKey="value" paddingAngle={3}>
+                    {catData.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                  </Pie>
+                  <Legend iconType="circle" iconSize={9} formatter={v=><span style={{fontSize:11}}>{v}</span>} />
+                  <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,fontSize:12}} />
+                </PieChart>
+              </ResponsiveContainer>
+            : <div style={{color:'#6b6560',fontSize:13,textAlign:'center',paddingTop:60}}>No data this month</div>
+          }
+        </Card>
+      </div>
 
-            setExpenseForm({
-              amount: '',
-              category: 'personal',
-              date: new Date().toISOString().split('T')[0],
-              note: '',
-              linkedTaskId: null
-            });
-          };
-
-          const deleteTask = (id) => {
-            setTasks(tasks.filter(t => t.id !== id));
-            setExpenses(expenses.map(e => e.linkedTaskId === id ? { ...e, linkedTaskId: null } : e));
-          };
-
-          const deleteExpense = (id) => {
-            setExpenses(expenses.filter(e => e.id !== id));
-            setTasks(tasks.map(t => t.linkedExpenseId === id ? { ...t, linkedExpenseId: null } : t));
-          };
-
-          const toggleTaskStatus = (id) => {
-            setTasks(tasks.map(t =>
-              t.id === id ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t
-            ));
-          };
-
-          // Calculate monthly expenses
-          const getMonthlyExpenses = () => {
-            const now = new Date();
-            const months = [];
-            const monthlyData = [];
-
-            // Get last 6 months
-            for (let i = 5; i >= 0; i--) {
-              const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-              const monthKey = date.toISOString().slice(0, 7);
-              const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-              
-              const monthTotal = expenses
-                .filter(e => e.date.startsWith(monthKey))
-                .reduce((sum, e) => sum + e.amount, 0);
-              
-              months.push(monthName);
-              monthlyData.push(monthTotal);
-            }
-
-            return { months, monthlyData };
-          };
-
-          // Calculate category breakdown for current month
-          const getCurrentMonthCategoryData = () => {
-            const currentMonth = new Date().toISOString().slice(0, 7);
-            const categoryTotals = categories.map(cat => ({
-              category: cat,
-              total: expenses
-                .filter(e => e.date.startsWith(currentMonth) && e.category === cat)
-                .reduce((sum, e) => sum + e.amount, 0)
-            }));
-            return categoryTotals;
-          };
-
-          // Update charts when expenses change
-          useEffect(() => {
-            if (activeTab === 'dashboard') {
-              // Monthly trend chart
-              if (monthlyChartRef.current) {
-                const { months, monthlyData } = getMonthlyExpenses();
-                
-                if (monthlyChartInstance.current) {
-                  monthlyChartInstance.current.destroy();
-                }
-
-                const ctx = monthlyChartRef.current.getContext('2d');
-                monthlyChartInstance.current = new Chart(ctx, {
-                  type: 'line',
-                  data: {
-                    labels: months,
-                    datasets: [{
-                      label: 'Monthly Expenses (₹)',
-                      data: monthlyData,
-                      borderColor: 'rgb(79, 70, 229)',
-                      backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                      tension: 0.4,
-                      fill: true
-                    }]
-                  },
-                  options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: false
-                      }
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          callback: function(value) {
-                            return '₹' + value;
-                          }
-                        }
-                      }
-                    }
-                  }
-                });
-              }
-
-              // Category pie chart
-              if (categoryChartRef.current) {
-                const categoryData = getCurrentMonthCategoryData();
-                const hasData = categoryData.some(c => c.total > 0);
-
-                if (categoryChartInstance.current) {
-                  categoryChartInstance.current.destroy();
-                }
-
-                if (hasData) {
-                  const ctx = categoryChartRef.current.getContext('2d');
-                  categoryChartInstance.current = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                      labels: categoryData.map(c => c.category.charAt(0).toUpperCase() + c.category.slice(1)),
-                      datasets: [{
-                        data: categoryData.map(c => c.total),
-                        backgroundColor: [
-                          'rgba(59, 130, 246, 0.8)',
-                          'rgba(16, 185, 129, 0.8)',
-                          'rgba(249, 115, 22, 0.8)',
-                          'rgba(168, 85, 247, 0.8)'
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                      }]
-                    },
-                    options: {
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'bottom'
-                        }
-                      }
-                    }
-                  });
-                }
-              }
-            }
-          }, [expenses, activeTab]);
-
-          const today = new Date().toISOString().split('T')[0];
-          const currentMonth = new Date().toISOString().slice(0, 7);
-          const lastMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7);
-
-          const todayExpenses = expenses.filter(e => e.date === today).reduce((sum, e) => sum + e.amount, 0);
-          const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth)).reduce((sum, e) => sum + e.amount, 0);
-          const lastMonthExpenses = expenses.filter(e => e.date.startsWith(lastMonth)).reduce((sum, e) => sum + e.amount, 0);
-          
-          const monthDiff = monthExpenses - lastMonthExpenses;
-          const monthDiffPercent = lastMonthExpenses > 0 ? ((monthDiff / lastMonthExpenses) * 100).toFixed(1) : 0;
-
-          const expensesByCategory = categories.map(cat => ({
-            category: cat,
-            total: expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0)
-          }));
-
-          const todayTasks = tasks.filter(t => t.dueDate === today);
-          const completedTasks = tasks.filter(t => t.status === 'completed').length;
-
-          return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-              <div className="max-w-6xl mx-auto">
-                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                  <h1 className="text-3xl font-bold text-gray-800 mb-2">💰 Task & Expense Tracker</h1>
-                  <p className="text-gray-600">Track what you do and what it costs</p>
+      <Card style={{padding:20}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📅 Today's Tasks ({todayTasks.length})</div>
+        {todayTasks.length===0
+          ? <p style={{color:'#6b6560',fontSize:13,textAlign:'center',padding:'16px 0'}}>No tasks due today ✓</p>
+          : <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {todayTasks.map(t=>(
+                <div key={t.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 13px',borderRadius:8,background:'#f0ede8'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:9}}>
+                    <span style={{fontSize:13,fontWeight:600,color:t.status==='completed'?'#6b6560':'#1a1814',textDecoration:t.status==='completed'?'line-through':'none'}}>{t.title}</span>
+                    <Tag type={t.priority}>{t.priority}</Tag>
+                  </div>
+                  <Tag type="blue">{t.status}</Tag>
                 </div>
-
-                <div className="flex gap-2 mb-6">
-                  {['dashboard', 'tasks', 'expenses'].map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === tab
-                          ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                    >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                  ))}
-                </div>
-
-                {activeTab === 'dashboard' && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-green-500">
-                        <p className="text-gray-600 text-sm mb-1">Today's Expenses</p>
-                        <p className="text-3xl font-bold text-gray-800">₹{todayExpenses.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-blue-500">
-                        <p className="text-gray-600 text-sm mb-1">This Month</p>
-                        <p className="text-3xl font-bold text-gray-800">₹{monthExpenses.toFixed(2)}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          {monthDiff > 0 ? (
-                            <>
-                              <TrendingUp />
-                              <span className="text-red-600 text-sm font-medium">+{monthDiffPercent}%</span>
-                            </>
-                          ) : monthDiff < 0 ? (
-                            <>
-                              <TrendingDown />
-                              <span className="text-green-600 text-sm font-medium">{monthDiffPercent}%</span>
-                            </>
-                          ) : null}
-                          <span className="text-gray-500 text-sm">vs last month</span>
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-orange-500">
-                        <p className="text-gray-600 text-sm mb-1">Last Month</p>
-                        <p className="text-3xl font-bold text-gray-800">₹{lastMonthExpenses.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-purple-500">
-                        <p className="text-gray-600 text-sm mb-1">Tasks Completed</p>
-                        <p className="text-3xl font-bold text-gray-800">{completedTasks}/{tasks.length}</p>
-                      </div>
-                    </div>
-
-                    {/* Monthly Trend Chart */}
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">📈 6-Month Expense Trend</h2>
-                      <div style={{ height: '300px' }}>
-                        <canvas ref={monthlyChartRef}></canvas>
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {/* Category Pie Chart */}
-                      <div className="bg-white rounded-xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">🎯 This Month by Category</h2>
-                        <div style={{ height: '300px' }}>
-                          <canvas ref={categoryChartRef}></canvas>
-                        </div>
-                      </div>
-
-                      {/* Category List */}
-                      <div className="bg-white rounded-xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">📊 All-Time by Category</h2>
-                        <div className="space-y-3">
-                          {expensesByCategory.map(item => (
-                            <div key={item.category} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                              <span className="capitalize font-medium text-gray-700">{item.category}</span>
-                              <span className="font-bold text-indigo-600">₹{item.total.toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Today's Tasks ({todayTasks.length})</h2>
-                      {todayTasks.length > 0 ? (
-                        <div className="space-y-3">
-                          {todayTasks.map(task => (
-                            <div key={task.id} className="p-4 border border-gray-200 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h3 className="font-semibold text-gray-800">{task.title}</h3>
-                                  <div className="flex gap-2 mt-1">
-                                    <span className={`px-2 py-1 rounded text-xs ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
-                                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                          'bg-green-100 text-green-700'
-                                      }`}>
-                                      {task.priority}
-                                    </span>
-                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
-                                      {task.category}
-                                    </span>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => toggleTaskStatus(task.id)}
-                                  className={`px-4 py-2 rounded-lg font-medium ${task.status === 'completed'
-                                      ? 'bg-green-500 text-white'
-                                      : 'bg-gray-200 text-gray-700'
-                                    }`}
-                                >
-                                  {task.status === 'completed' ? '✓ Done' : 'Pending'}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-center text-gray-500 py-8">No tasks due today</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'tasks' && (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">
-                        {editingTask ? '✏️ Edit Task' : '➕ Add Task'}
-                      </h2>
-                      <form onSubmit={handleTaskSubmit} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Task Title *</label>
-                          <input
-                            type="text"
-                            value={taskForm.title}
-                            onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="e.g., Buy groceries"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                            <select
-                              value={taskForm.priority}
-                              onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            >
-                              {priorities.map(p => (
-                                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                            <select
-                              value={taskForm.category}
-                              onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            >
-                              {categories.map(c => (
-                                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                          <input
-                            type="date"
-                            value={taskForm.dueDate}
-                            onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Link to Expense (Optional)</label>
-                          <select
-                            value={taskForm.linkedExpenseId || ''}
-                            onChange={(e) => setTaskForm({ ...taskForm, linkedExpenseId: e.target.value || null })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="">No expense linked</option>
-                            {expenses
-                              .filter(e => !e.linkedTaskId || e.id === taskForm.linkedExpenseId)
-                              .map(e => (
-                                <option key={e.id} value={e.id}>
-                                  ₹{e.amount.toFixed(2)} - {e.note || e.category} ({e.date})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                          >
-                            {editingTask ? 'Update Task' : 'Add Task'}
-                          </button>
-                          {editingTask && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTask(null);
-                                setTaskForm({
-                                  title: '',
-                                  priority: 'medium',
-                                  dueDate: '',
-                                  category: 'personal',
-                                  status: 'pending',
-                                  linkedExpenseId: null
-                                });
-                              }}
-                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </form>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">
-                        📋 All Tasks ({tasks.length})
-                      </h2>
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                        {tasks.map(task => {
-                          const linkedExpense = expenses.find(e => e.id === task.linkedExpenseId);
-                          return (
-                            <div key={task.id} className={`border rounded-lg p-4 transition-all ${task.status === 'completed'
-                                ? 'bg-green-50 border-green-200'
-                                : 'border-gray-200 hover:shadow-md'
-                              }`}>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <button
-                                      onClick={() => toggleTaskStatus(task.id)}
-                                      className={`w-5 h-5 rounded border-2 flex items-center justify-center ${task.status === 'completed'
-                                          ? 'bg-green-500 border-green-500'
-                                          : 'border-gray-300 hover:border-green-500'
-                                        }`}
-                                    >
-                                      {task.status === 'completed' && <Check />}
-                                    </button>
-                                    <h3 className={`font-semibold ${task.status === 'completed'
-                                        ? 'line-through text-gray-500'
-                                        : 'text-gray-800'
-                                      }`}>
-                                      {task.title}
-                                    </h3>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2 ml-7">
-                                    <span className={`px-2 py-1 rounded text-xs ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
-                                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                          'bg-green-100 text-green-700'
-                                      }`}>
-                                      {task.priority}
-                                    </span>
-                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
-                                      {task.category}
-                                    </span>
-                                    {task.dueDate && (
-                                      <span className="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700">
-                                        📅 {task.dueDate}
-                                      </span>
-                                    )}
-                                    {linkedExpense && (
-                                      <span className="px-2 py-1 rounded text-xs bg-orange-100 text-orange-700">
-                                        💰 ₹{linkedExpense.amount.toFixed(2)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setEditingTask(task);
-                                      setTaskForm(task);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800"
-                                  >
-                                    <Edit2 />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteTask(task.id)}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    <Trash2 />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {tasks.length === 0 && (
-                          <p className="text-center text-gray-500 py-8">No tasks yet. Add your first task!</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'expenses' && (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">
-                        {editingExpense ? '✏️ Edit Expense' : '➕ Add Expense'}
-                      </h2>
-                      <form onSubmit={handleExpenseSubmit} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹) *</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            value={expenseForm.amount}
-                            onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="0.00"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-                          <input
-                            type="text"
-                            value={expenseForm.note}
-                            onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="e.g., Groceries at Walmart"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                            <select
-                              value={expenseForm.category}
-                              onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            >
-                              {categories.map(c => (
-                                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                            <input
-                              type="date"
-                              value={expenseForm.date}
-                              onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Link to Task (Optional)</label>
-                          <select
-                            value={expenseForm.linkedTaskId || ''}
-                            onChange={(e) => setExpenseForm({ ...expenseForm, linkedTaskId: e.target.value || null })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="">No task linked</option>
-                            {tasks
-                              .filter(t => !t.linkedExpenseId || t.id === expenseForm.linkedTaskId)
-                              .map(t => (
-                                <option key={t.id} value={t.id}>
-                                  {t.title} ({t.category})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                          >
-                            {editingExpense ? 'Update Expense' : 'Add Expense'}
-                          </button>
-                          {editingExpense && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingExpense(null);
-                                setExpenseForm({
-                                  amount: '',
-                                  category: 'personal',
-                                  date: new Date().toISOString().split('T')[0],
-                                  note: '',
-                                  linkedTaskId: null
-                                });
-                              }}
-                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </form>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-6 shadow-lg">
-                      <h2 className="text-xl font-bold text-gray-800 mb-4">
-                        💳 All Expenses ({expenses.length})
-                      </h2>
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                        {expenses.map(expense => {
-                          const linkedTask = tasks.find(t => t.id === expense.linkedTaskId);
-                          return (
-                            <div key={expense.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-semibold text-gray-800">{expense.note || 'Expense'}</h3>
-                                    <span className="text-xl font-bold text-green-600">₹{expense.amount.toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-700 capitalize">
-                                      {expense.category}
-                                    </span>
-                                    <span className="px-2 py-1 rounded text-xs bg-purple-100 text-purple-700">
-                                      📅 {expense.date}
-                                    </span>
-                                    {linkedTask && (
-                                      <span className="px-2 py-1 rounded text-xs bg-orange-100 text-orange-700">
-                                        📋 {linkedTask.title}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex gap-2 ml-4">
-                                  <button
-                                    onClick={() => {
-                                      setEditingExpense(expense);
-                                      setExpenseForm(expense);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800"
-                                  >
-                                    <Edit2 />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteExpense(expense.id)}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    <Trash2 />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {expenses.length === 0 && (
-                          <p className="text-center text-gray-500 py-8">No expenses yet. Add your first expense!</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
-          );
-        };
+        }
+      </Card>
+    </div>
+  );
+};
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<TaskExpenseTracker />);
-    </script>
-</body>
-</html>
+// ── Tasks Tab ────────────────────────────────────────────────────────────────
+const TasksTab = ({ tasks, setTasks, expenses, showToast }) => {
+  const emptyForm = { title:'', priority:'medium', dueDate:'', category:'personal', status:'pending', subtasks:[], linkedExpenseId:null };
+  const [form, setForm] = useState(emptyForm);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('created');
+  const [selected, setSelected] = useState([]);
+  const [newSubtask, setNewSubtask] = useState('');
+  const tod = today();
+
+  const reset = () => { setForm(emptyForm); setEditing(null); setNewSubtask(''); };
+
+  const submit = e => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    if (editing) {
+      setTasks(tasks.map(t=>t.id===editing.id?{...form,id:editing.id,createdAt:editing.createdAt}:t));
+      showToast('Task updated ✓');
+    } else {
+      setTasks([...tasks,{...form,id:Date.now().toString(),createdAt:Date.now()}]);
+      showToast('Task added ✓');
+    }
+    reset();
+  };
+
+  const deleteTask = id => { setTasks(tasks.filter(t=>t.id!==id)); showToast('Task deleted'); };
+  const toggle = id => setTasks(tasks.map(t=>t.id===id?{...t,status:t.status==='completed'?'pending':'completed'}:t));
+  const toggleSubtask = (tid,idx) => setTasks(tasks.map(t=>t.id===tid?{...t,subtasks:t.subtasks.map((s,i)=>i===idx?{...s,done:!s.done}:s)}:t));
+  const addSubtask = () => { if(!newSubtask.trim())return; setForm({...form,subtasks:[...form.subtasks,{text:newSubtask.trim(),done:false}]}); setNewSubtask(''); };
+  const removeSubtask = idx => setForm({...form,subtasks:form.subtasks.filter((_,i)=>i!==idx)});
+
+  const toggleSelect = id => setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  const bulkComplete = () => { setTasks(tasks.map(t=>selected.includes(t.id)?{...t,status:'completed'}:t)); setSelected([]); showToast(`${selected.length} tasks completed`); };
+  const bulkDelete   = () => { setTasks(tasks.filter(t=>!selected.includes(t.id))); setSelected([]); showToast(`${selected.length} tasks deleted`); };
+
+  let filtered = tasks.filter(t=>{
+    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterPriority!=='all' && t.priority!==filterPriority) return false;
+    if (filterStatus==='overdue') return t.status!=='completed'&&t.dueDate&&t.dueDate<tod;
+    if (filterStatus!=='all' && t.status!==filterStatus) return false;
+    return true;
+  });
+  filtered = [...filtered].sort((a,b)=>{
+    if (sortBy==='dueDate') return (a.dueDate||'9999')>(b.dueDate||'9999')?1:-1;
+    if (sortBy==='priority') return {high:0,medium:1,low:2}[a.priority]-{high:0,medium:1,low:2}[b.priority];
+    if (sortBy==='title') return a.title.localeCompare(b.title);
+    return (b.createdAt||0)-(a.createdAt||0);
+  });
+
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'360px 1fr',gap:18,alignItems:'start'}}>
+      <Card style={{padding:22,position:'sticky',top:72}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:16}}>{editing?'✏️ Edit Task':'➕ New Task'}</div>
+        <form onSubmit={submit} style={{display:'flex',flexDirection:'column',gap:13}}>
+          <div><label>Title *</label><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="What needs to be done?" /></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div><label>Priority</label>
+              <select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>
+                {PRIORITIES.map(p=><option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+              </select>
+            </div>
+            <div><label>Category</label>
+              <select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>
+                {CATEGORIES.map(c=><option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><label>Due Date</label><input type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} /></div>
+          <div>
+            <label>Subtasks ({form.subtasks.length})</label>
+            <div style={{display:'flex',gap:6,marginBottom:6}}>
+              <input value={newSubtask} onChange={e=>setNewSubtask(e.target.value)} placeholder="Add a subtask..." onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addSubtask();}}} style={{flex:1}} />
+              <Btn onClick={addSubtask} variant="secondary" size="sm">Add</Btn>
+            </div>
+            {form.subtasks.map((s,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 7px',borderRadius:6,fontSize:13,color:'#6b6560'}}>
+                <span style={{flex:1}}>• {s.text}</span>
+                <button type="button" onClick={()=>removeSubtask(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#d42a2a',fontSize:16,lineHeight:1}}>×</button>
+              </div>
+            ))}
+          </div>
+          <div><label>Link Expense (Optional)</label>
+            <select value={form.linkedExpenseId||''} onChange={e=>setForm({...form,linkedExpenseId:e.target.value||null})}>
+              <option value="">None</option>
+              {expenses.map(e=><option key={e.id} value={e.id}>{fmt(e.amount)} – {e.note||e.category} ({e.date})</option>)}
+            </select>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <Btn onClick={submit} style={{flex:1}}>{editing?'Update':'Add Task'}</Btn>
+            {editing&&<Btn onClick={reset} variant="secondary">Cancel</Btn>}
+          </div>
+        </form>
+      </Card>
+
+      <div style={{display:'flex',flexDirection:'column',gap:13}}>
+        <Card style={{padding:14}}>
+          <div style={{display:'flex',gap:9,flexWrap:'wrap',alignItems:'center'}}>
+            <div style={{position:'relative',flex:'1',minWidth:150}}>
+              <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'#6b6560',fontSize:14}}>🔍</span>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search tasks…" style={{paddingLeft:30}} />
+            </div>
+            <select value={filterPriority} onChange={e=>setFilterPriority(e.target.value)} style={{width:130}}>
+              <option value="all">All Priorities</option>
+              {PRIORITIES.map(p=><option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{width:130}}>
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="overdue">Overdue</option>
+            </select>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:130}}>
+              <option value="created">Newest First</option>
+              <option value="dueDate">Due Date</option>
+              <option value="priority">Priority</option>
+              <option value="title">A–Z</option>
+            </select>
+          </div>
+        </Card>
+
+        {selected.length>0 && (
+          <Card style={{padding:11,display:'flex',alignItems:'center',gap:9,background:'#fdf0e0',borderColor:'#d4622a'}}>
+            <span style={{fontSize:13,fontWeight:600,color:'#d4622a'}}>{selected.length} selected</span>
+            <Btn onClick={bulkComplete} variant="success" size="sm">✓ Complete</Btn>
+            <Btn onClick={bulkDelete} variant="danger" size="sm">🗑 Delete</Btn>
+            <Btn onClick={()=>setSelected([])} variant="secondary" size="sm" style={{marginLeft:'auto'}}>Clear</Btn>
+            <Btn onClick={()=>setSelected(filtered.map(t=>t.id))} variant="secondary" size="sm">Select All</Btn>
+          </Card>
+        )}
+
+        <div style={{fontSize:12,color:'#6b6560',paddingLeft:2}}>{filtered.length} task{filtered.length!==1?'s':''}</div>
+
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>
+          {filtered.map(task=>{
+            const isOverdue = task.status!=='completed'&&task.dueDate&&task.dueDate<tod;
+            const linkedExp = expenses.find(e=>e.id===task.linkedExpenseId);
+            const subs = task.subtasks||[];
+            const sDone = subs.filter(s=>s.done).length;
+            const progress = subs.length>0?(sDone/subs.length)*100:0;
+            const isSel = selected.includes(task.id);
+            return (
+              <div key={task.id} style={{border:`1.5px solid ${isOverdue?'#f5c0c0':isSel?'#d4622a':'#e2ddd6'}`,borderRadius:10,padding:'13px',background:task.status==='completed'?'#f5fbf7':isOverdue?'#fdf5f5':'#fff',outline:isSel?'2px solid #d4622a':'none',transition:'all .15s'}}>
+                <div style={{display:'flex',alignItems:'flex-start',gap:9}}>
+                  <Checkbox checked={isSel} onClick={()=>toggleSelect(task.id)} />
+                  <Checkbox checked={task.status==='completed'} onClick={()=>toggle(task.id)} />
+                  <div style={{flex:1}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:5}}>
+                      <span style={{fontSize:13,fontWeight:600,color:task.status==='completed'?'#6b6560':'#1a1814',textDecoration:task.status==='completed'?'line-through':'none'}}>{task.title}</span>
+                      <Tag type={task.priority}>{task.priority}</Tag>
+                      <span style={{display:'inline-flex',padding:'2px 9px',borderRadius:20,fontSize:11,fontWeight:700,background:CAT_BG[task.category],color:CAT_COLORS[task.category]}}>{task.category}</span>
+                      {task.dueDate && <Tag type={isOverdue?'high':'purple'}>📅 {task.dueDate}{isOverdue?' OVERDUE':''}</Tag>}
+                      {linkedExp && <Tag type="orange">💰 {fmt(linkedExp.amount)}</Tag>}
+                    </div>
+                    {subs.length>0 && (
+                      <div style={{marginBottom:5}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+                          <div style={{flex:1,height:4,background:'#f0ede8',borderRadius:2,overflow:'hidden'}}>
+                            <div style={{height:'100%',width:`${progress}%`,background:progress===100?'#2a9d5c':'#2a7dd4',borderRadius:2,transition:'width .3s'}}/>
+                          </div>
+                          <span style={{fontSize:11,color:'#6b6560',fontFamily:'monospace',whiteSpace:'nowrap'}}>{sDone}/{subs.length}</span>
+                        </div>
+                        {subs.map((s,i)=>(
+                          <div key={i} onClick={()=>toggleSubtask(task.id,i)} style={{display:'flex',alignItems:'center',gap:7,padding:'4px 7px',borderRadius:6,cursor:'pointer'}}>
+                            <Checkbox checked={s.done} size={14} onClick={()=>toggleSubtask(task.id,i)} />
+                            <span style={{fontSize:12,color:s.done?'#6b6560':'#1a1814',textDecoration:s.done?'line-through':'none'}}>{s.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{display:'flex',gap:4,flexShrink:0}}>
+                    <Btn onClick={()=>{setEditing(task);setForm({...task,subtasks:task.subtasks||[]});}} variant="secondary" size="sm">✏️</Btn>
+                    <Btn onClick={()=>deleteTask(task.id)} variant="danger" size="sm">🗑</Btn>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length===0&&<div style={{textAlign:'center',color:'#6b6560',padding:'40px 0',fontSize:13}}>No tasks found.</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Expenses Tab ─────────────────────────────────────────────────────────────
+const ExpensesTab = ({ expenses, setExpenses, income, setIncome, tasks, showToast }) => {
+  const [expForm, setExpForm] = useState({ amount:'', category:'personal', date:today(), note:'', linkedTaskId:null });
+  const [incForm, setIncForm] = useState({ amount:'', source:'salary', date:today(), note:'' });
+  const [editingExp, setEditingExp] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
+  const [viewMode, setViewMode] = useState('expenses');
+  const [browseMonth, setBrowseMonth] = useState(monthKey(today()));
+
+  const resetExp = () => { setExpForm({amount:'',category:'personal',date:today(),note:'',linkedTaskId:null}); setEditingExp(null); };
+  const submitExp = e => {
+    e.preventDefault();
+    if (!expForm.amount||+expForm.amount<=0) return;
+    if (editingExp) {
+      setExpenses(expenses.map(x=>x.id===editingExp.id?{...expForm,id:editingExp.id,amount:+expForm.amount}:x));
+      showToast('Expense updated ✓'); setEditingExp(null);
+    } else {
+      setExpenses([...expenses,{...expForm,id:Date.now().toString(),amount:+expForm.amount}]);
+      showToast('Expense added ✓');
+    }
+    resetExp();
+  };
+  const submitInc = e => {
+    e.preventDefault();
+    if (!incForm.amount||+incForm.amount<=0) return;
+    setIncome([...income,{...incForm,id:Date.now().toString(),amount:+incForm.amount}]);
+    setIncForm({amount:'',source:'salary',date:today(),note:''});
+    showToast('Income added ✓');
+  };
+  const deleteExp = id => { setExpenses(expenses.filter(e=>e.id!==id)); showToast('Deleted'); };
+  const deleteInc = id => { setIncome(income.filter(i=>i.id!==id)); showToast('Deleted'); };
+
+  const prevMonth = () => { const [y,m]=browseMonth.split('-').map(Number); setBrowseMonth(monthKey(new Date(y,m-2,1).toISOString())); };
+  const nextMonth = () => { const [y,m]=browseMonth.split('-').map(Number); setBrowseMonth(monthKey(new Date(y,m,1).toISOString())); };
+  const isCurrentMonth = browseMonth===monthKey(today());
+
+  const monthExpenses = expenses.filter(e=>monthKey(e.date)===browseMonth);
+  const monthIncome   = income.filter(i=>monthKey(i.date)===browseMonth);
+  const monthTotal    = monthExpenses.reduce((s,e)=>s+e.amount,0);
+  const monthIncTotal = monthIncome.reduce((s,i)=>s+i.amount,0);
+  const catTotals = CATEGORIES.map(c=>({c,v:monthExpenses.filter(e=>e.category===c).reduce((s,e)=>s+e.amount,0)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+
+  let filteredExp = monthExpenses.filter(e=>{
+    if (filterCat!=='all'&&e.category!==filterCat) return false;
+    if (search&&!e.note?.toLowerCase().includes(search.toLowerCase())&&!e.category.includes(search.toLowerCase())) return false;
+    return true;
+  });
+  filteredExp = [...filteredExp].sort((a,b)=>{
+    const dir = sortDir==='asc'?1:-1;
+    if (sortBy==='amount') return dir*(a.amount-b.amount);
+    if (sortBy==='category') return dir*a.category.localeCompare(b.category);
+    return dir*(a.date>b.date?1:-1);
+  });
+
+  const NavBtn = ({ onClick, disabled, children }) => (
+    <button onClick={onClick} disabled={disabled} style={{width:32,height:32,borderRadius:8,border:'1.5px solid #e2ddd6',background:'#fff',cursor:disabled?'default':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,opacity:disabled?.3:1}}>{children}</button>
+  );
+
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'340px 1fr',gap:18,alignItems:'start'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <Card style={{padding:22}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>{editingExp?'✏️ Edit Expense':'💸 Add Expense'}</div>
+          <form onSubmit={submitExp} style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div><label>Amount (₹) *</label><input type="number" min="0.01" step="0.01" value={expForm.amount} onChange={e=>setExpForm({...expForm,amount:e.target.value})} placeholder="0.00" /></div>
+            <div><label>Note</label><input value={expForm.note} onChange={e=>setExpForm({...expForm,note:e.target.value})} placeholder="What was this for?" /></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              <div><label>Category</label>
+                <select value={expForm.category} onChange={e=>setExpForm({...expForm,category:e.target.value})}>
+                  {CATEGORIES.map(c=><option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+                </select>
+              </div>
+              <div><label>Date</label><input type="date" value={expForm.date} onChange={e=>setExpForm({...expForm,date:e.target.value})} /></div>
+            </div>
+            <div><label>Link Task (Optional)</label>
+              <select value={expForm.linkedTaskId||''} onChange={e=>setExpForm({...expForm,linkedTaskId:e.target.value||null})}>
+                <option value="">None</option>
+                {tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <Btn style={{flex:1}}>{editingExp?'Update':'Add Expense'}</Btn>
+              {editingExp&&<Btn onClick={resetExp} variant="secondary">Cancel</Btn>}
+            </div>
+          </form>
+        </Card>
+
+        <Card style={{padding:22}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>💵 Add Income</div>
+          <form onSubmit={submitInc} style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div><label>Amount (₹) *</label><input type="number" min="0.01" step="0.01" value={incForm.amount} onChange={e=>setIncForm({...incForm,amount:e.target.value})} placeholder="0.00" /></div>
+            <div><label>Source</label>
+              <select value={incForm.source} onChange={e=>setIncForm({...incForm,source:e.target.value})}>
+                {INC_SOURCES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              <div><label>Date</label><input type="date" value={incForm.date} onChange={e=>setIncForm({...incForm,date:e.target.value})} /></div>
+              <div><label>Note</label><input value={incForm.note} onChange={e=>setIncForm({...incForm,note:e.target.value})} placeholder="Optional" /></div>
+            </div>
+            <Btn variant="green">Add Income</Btn>
+          </form>
+        </Card>
+      </div>
+
+      <div style={{display:'flex',flexDirection:'column',gap:13}}>
+        <Card style={{padding:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom: catTotals.length>0?14:0}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <NavBtn onClick={prevMonth}>‹</NavBtn>
+              <span style={{fontSize:15,fontWeight:700,minWidth:130,textAlign:'center'}}>{monthLabel(browseMonth)}</span>
+              <NavBtn onClick={nextMonth} disabled={isCurrentMonth}>›</NavBtn>
+            </div>
+            <div style={{display:'flex',gap:16}}>
+              {[['Expenses',monthTotal,'#d4622a'],['Income',monthIncTotal,'#2a9d5c'],['Net',monthIncTotal-monthTotal,monthIncTotal-monthTotal>=0?'#2a9d5c':'#d42a2a']].map(([l,v,c])=>(
+                <div key={l} style={{textAlign:'right'}}>
+                  <div style={{fontSize:10,color:'#6b6560',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>{l}</div>
+                  <div style={{fontFamily:'monospace',fontSize:16,fontWeight:700,color:c}}>{fmt(v)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {catTotals.length>0 && catTotals.map(({c,v})=>(
+            <div key={c} style={{display:'flex',alignItems:'center',gap:9,marginBottom:5}}>
+              <span style={{width:65,fontSize:11,fontWeight:700,color:'#6b6560',textTransform:'capitalize'}}>{c}</span>
+              <div style={{flex:1,height:5,background:'#f0ede8',borderRadius:2,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${Math.min((v/monthTotal)*100,100)}%`,background:CAT_COLORS[c],borderRadius:2,transition:'width .4s'}}/>
+              </div>
+              <span style={{width:75,textAlign:'right',fontSize:11,fontFamily:'monospace',color:'#1a1814'}}>{fmt(v)}</span>
+            </div>
+          ))}
+        </Card>
+
+        <Card style={{padding:13}}>
+          <div style={{display:'flex',gap:9,flexWrap:'wrap',alignItems:'center'}}>
+            <div style={{display:'flex',background:'#f0ede8',borderRadius:8,padding:3,gap:2}}>
+              {['expenses','income'].map(m=>(
+                <button key={m} onClick={()=>setViewMode(m)} style={{padding:'5px 13px',borderRadius:6,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',background:viewMode===m?'#fff':'transparent',color:viewMode===m?'#1a1814':'#6b6560',transition:'all .15s'}}>
+                  {m.charAt(0).toUpperCase()+m.slice(1)}
+                </button>
+              ))}
+            </div>
+            {viewMode==='expenses'&&<>
+              <div style={{position:'relative',flex:1,minWidth:120}}>
+                <span style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',fontSize:13}}>🔍</span>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" style={{paddingLeft:28}} />
+              </div>
+              <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{width:120}}>
+                <option value="all">All Categories</option>
+                {CATEGORIES.map(c=><option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+              </select>
+              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:110}}>
+                <option value="date">Date</option>
+                <option value="amount">Amount</option>
+                <option value="category">Category</option>
+              </select>
+              <Btn onClick={()=>setSortDir(d=>d==='asc'?'desc':'asc')} variant="secondary" size="sm">{sortDir==='asc'?'↑':'↓'}</Btn>
+            </>}
+          </div>
+        </Card>
+
+        {viewMode==='expenses'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <div style={{fontSize:11,color:'#6b6560',paddingLeft:2}}>{filteredExp.length} expense{filteredExp.length!==1?'s':''} · {fmt(filteredExp.reduce((s,e)=>s+e.amount,0))}</div>
+            {filteredExp.map(exp=>{
+              const lt = tasks.find(t=>t.id===exp.linkedTaskId);
+              return (
+                <div key={exp.id} style={{border:'1.5px solid #e2ddd6',borderRadius:10,padding:'13px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:11}}>
+                    <div style={{width:40,height:40,borderRadius:10,background:CAT_BG[exp.category],display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>{CAT_ICONS[exp.category]}</div>
+                    <div style={{flex:1}}>
+                      <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+                        <span style={{fontSize:13,fontWeight:600}}>{exp.note||'Expense'}</span>
+                        <span style={{display:'inline-flex',padding:'2px 9px',borderRadius:20,fontSize:11,fontWeight:700,background:CAT_BG[exp.category],color:CAT_COLORS[exp.category]}}>{exp.category}</span>
+                        {lt&&<Tag type="blue">📋 {lt.title}</Tag>}
+                      </div>
+                      <span style={{fontSize:11,color:'#6b6560'}}>{exp.date}</span>
+                    </div>
+                    <div style={{fontFamily:'monospace',fontSize:16,fontWeight:700,color:'#d4622a'}}>{fmt(exp.amount)}</div>
+                    <Btn onClick={()=>{setEditingExp(exp);setExpForm(exp);}} variant="secondary" size="sm">✏️</Btn>
+                    <Btn onClick={()=>deleteExp(exp.id)} variant="danger" size="sm">🗑</Btn>
+                  </div>
+                </div>
+              );
+            })}
+            {filteredExp.length===0&&<div style={{textAlign:'center',color:'#6b6560',padding:'40px 0',fontSize:13}}>No expenses for this period.</div>}
+          </div>
+        )}
+
+        {viewMode==='income'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {monthIncome.map(inc=>(
+              <div key={inc.id} style={{border:'1.5px solid #e2ddd6',borderRadius:10,padding:'13px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:11}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:'#e0f5ea',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>💵</div>
+                  <div style={{flex:1}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+                      <span style={{fontSize:13,fontWeight:600}}>{inc.note||inc.source}</span>
+                      <Tag type="gray">{inc.source}</Tag>
+                    </div>
+                    <span style={{fontSize:11,color:'#6b6560'}}>{inc.date}</span>
+                  </div>
+                  <div style={{fontFamily:'monospace',fontSize:16,fontWeight:700,color:'#2a9d5c'}}>{fmt(inc.amount)}</div>
+                  <Btn onClick={()=>deleteInc(inc.id)} variant="danger" size="sm">🗑</Btn>
+                </div>
+              </div>
+            ))}
+            {monthIncome.length===0&&<div style={{textAlign:'center',color:'#6b6560',padding:'40px 0',fontSize:13}}>No income recorded for this period.</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Budget Tab ────────────────────────────────────────────────────────────────
+const BudgetTab = ({ budgets, setBudgets, expenses, income, showToast }) => {
+  const [editing, setEditing] = useState({});
+  const cur = monthKey(today());
+  const curInc = income.filter(i=>monthKey(i.date)===cur).reduce((s,i)=>s+i.amount,0);
+  const curExp = expenses.filter(e=>monthKey(e.date)===cur).reduce((s,e)=>s+e.amount,0);
+  const totalBudget = Object.values(budgets).reduce((s,v)=>s+v,0);
+
+  const saveBudget = cat => {
+    const v = parseFloat(editing[cat]);
+    if (!v||v<=0) return;
+    setBudgets({...budgets,[cat]:v});
+    setEditing({...editing,[cat]:''});
+    showToast(`Budget set for ${cat} ✓`);
+  };
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:18,maxWidth:820}}>
+      <Card style={{padding:22}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:16}}>📊 This Month Overview</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,marginBottom:18}}>
+          <StatCard label="Total Income" value={fmt(curInc)} accent="#2a9d5c" />
+          <StatCard label="Total Expenses" value={fmt(curExp)} accent="#d4622a" />
+          <StatCard label="Net Savings" value={fmt(curInc-curExp)} accent={curInc-curExp>=0?'#2a9d5c':'#d42a2a'} />
+        </div>
+        <div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+            <span style={{fontSize:11,fontWeight:700,color:'#6b6560',textTransform:'uppercase',letterSpacing:'.05em'}}>Spending Rate</span>
+            <span style={{fontFamily:'monospace',fontSize:12}}>{curInc>0?((curExp/curInc)*100).toFixed(1):0}% of income</span>
+          </div>
+          <div style={{height:9,background:'#f0ede8',borderRadius:4,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${curInc>0?Math.min((curExp/curInc)*100,100):0}%`,background:'linear-gradient(90deg,#d4622a,#e07748)',borderRadius:4,transition:'width .4s'}}/>
+          </div>
+        </div>
+      </Card>
+
+      <Card style={{padding:22}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:16}}>🎯 Category Budgets — {monthLabel(cur)}</div>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          {CATEGORIES.map(cat=>{
+            const spent = expenses.filter(e=>monthKey(e.date)===cur&&e.category===cat).reduce((s,e)=>s+e.amount,0);
+            const budget = budgets[cat]||0;
+            const pct = budget>0?Math.min((spent/budget)*100,100):0;
+            const over = budget>0&&spent>budget;
+            return (
+              <div key={cat}>
+                <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:7}}>
+                  <div style={{width:10,height:10,borderRadius:'50%',background:CAT_COLORS[cat],flexShrink:0}}/>
+                  <span style={{fontSize:13,fontWeight:700,textTransform:'capitalize',flex:1}}>{cat}</span>
+                  <span style={{fontFamily:'monospace',fontSize:12,color:over?'#d42a2a':'#1a1814'}}>{fmt(spent)}</span>
+                  <span style={{fontSize:11,color:'#6b6560'}}>of</span>
+                  <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600}}>{budget>0?fmt(budget):'—'}</span>
+                  {over&&<Tag type="high">Over!</Tag>}
+                </div>
+                <div style={{height:5,background:'#f0ede8',borderRadius:2,overflow:'hidden',marginBottom:7}}>
+                  <div style={{height:'100%',width:`${pct}%`,background:over?'#d42a2a':CAT_COLORS[cat],borderRadius:2,transition:'width .4s'}}/>
+                </div>
+                <div style={{display:'flex',gap:6}}>
+                  <input type="number" min="0" placeholder={`Set budget for ${cat}…`} value={editing[cat]||''}
+                    onChange={e=>setEditing({...editing,[cat]:e.target.value})}
+                    onKeyDown={e=>{if(e.key==='Enter')saveBudget(cat);}}
+                    style={{flex:1,fontSize:12,padding:'6px 11px'}} />
+                  <Btn onClick={()=>saveBudget(cat)} size="sm">Set</Btn>
+                  {budget>0&&<Btn onClick={()=>{const b={...budgets};delete b[cat];setBudgets(b);showToast('Budget cleared');}} variant="danger" size="sm">Clear</Btn>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {totalBudget>0&&(
+          <div style={{marginTop:18,paddingTop:14,borderTop:'1.5px solid #e2ddd6',display:'flex',justifyContent:'space-between'}}>
+            <span style={{fontSize:12,color:'#6b6560'}}>Total budgeted</span>
+            <span style={{fontFamily:'monospace',fontSize:14,fontWeight:700}}>{fmt(totalBudget)}</span>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+// ── App ───────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [tasks,    setTasks]    = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [income,   setIncome]   = useState([]);
+  const [budgets,  setBudgets]  = useState({});
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [toast, setToast] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const [t,e,i,b] = await Promise.all([
+          window.storage.get('tr_tasks'),
+          window.storage.get('tr_expenses'),
+          window.storage.get('tr_income'),
+          window.storage.get('tr_budgets'),
+        ].map(p=>p.catch(()=>null)));
+        if(t) setTasks(JSON.parse(t.value));
+        if(e) setExpenses(JSON.parse(e.value));
+        if(i) setIncome(JSON.parse(i.value));
+        if(b) setBudgets(JSON.parse(b.value));
+      } catch{}
+      setLoaded(true);
+    })();
+  },[]);
+
+  const persist = useCallback(async(key,val)=>{ try{await window.storage.set(key,JSON.stringify(val));}catch{} },[]);
+  const setAndPersist = (setter,key) => val => { setter(val); persist(key,val); };
+
+  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null),2500); };
+
+  if (!loaded) return <div style={{textAlign:'center',padding:60,color:'#6b6560',fontSize:14}}>Loading…</div>;
+
+  const TABS = ['dashboard','tasks','expenses','budget'];
+  return (
+    <div style={{minHeight:'100vh',background:'#f5f4f0'}}>
+      <style>{styles}</style>
+      <div style={{background:'#fff',borderBottom:'1.5px solid #e2ddd6',padding:'0 22px',position:'sticky',top:0,zIndex:50}}>
+        <div style={{maxWidth:1180,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:58}}>
+          <span style={{fontSize:20,fontWeight:800,letterSpacing:'-0.03em'}}><span style={{color:'#d4622a'}}>₹</span> Tracker</span>
+          <div style={{display:'flex',gap:3}}>
+            {TABS.map(tab=>(
+              <button key={tab} onClick={()=>setActiveTab(tab)}
+                style={{padding:'7px 18px',borderRadius:8,fontWeight:600,fontSize:13,cursor:'pointer',border:'none',fontFamily:'inherit',transition:'all .15s',background:activeTab===tab?'#d4622a':'transparent',color:activeTab===tab?'#fff':'#6b6560'}}>
+                {tab.charAt(0).toUpperCase()+tab.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:1180,margin:'0 auto',padding:'22px'}}>
+        {activeTab==='dashboard' && <Dashboard tasks={tasks} expenses={expenses} income={income} budgets={budgets} setActiveTab={setActiveTab}/>}
+        {activeTab==='tasks'     && <TasksTab tasks={tasks} setTasks={setAndPersist(setTasks,'tr_tasks')} expenses={expenses} showToast={showToast}/>}
+        {activeTab==='expenses'  && <ExpensesTab expenses={expenses} setExpenses={setAndPersist(setExpenses,'tr_expenses')} income={income} setIncome={setAndPersist(setIncome,'tr_income')} tasks={tasks} showToast={showToast}/>}
+        {activeTab==='budget'    && <BudgetTab budgets={budgets} setBudgets={setAndPersist(setBudgets,'tr_budgets')} expenses={expenses} income={income} showToast={showToast}/>}
+      </div>
+
+      {toast&&<div style={{position:'fixed',bottom:22,right:22,background:'#1a1814',color:'#fff',padding:'11px 19px',borderRadius:10,fontSize:13,fontWeight:500,zIndex:1000,animation:'slideUp .3s ease',boxShadow:'0 8px 32px rgba(0,0,0,.18)'}}>{toast}</div>}
+    </div>
+  );
+}
