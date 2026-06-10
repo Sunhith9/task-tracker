@@ -446,7 +446,7 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
             </div>
           </div>
 
-          <div class="card" style="padding:20px">
+          <div class="card" id="add-income-card" style="padding:20px">
             <div class="section-title">💵 Add Income</div>
             <div class="form-col">
               <div><label>Amount (₹) *</label><input type="number" id="i-amount" min="0.01" step="0.01" placeholder="0.00"/></div>
@@ -524,7 +524,7 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
         <div class="card" style="padding:20px">
           <div class="section-title">📊 This Month Overview</div>
           <div class="stats-grid" id="budget-stats" style="margin-bottom:16px"></div>
-          <div>
+          <div id="spending-rate-container">
             <div style="display:flex;justify-content:space-between;margin-bottom:5px">
               <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Spending Rate</span>
               <span class="mono" style="font-size:12px" id="spending-rate-label"></span>
@@ -549,6 +549,20 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
     <!-- SETTINGS -->
     <div id="tab-settings" class="tab-panel">
       <div style="display:flex;flex-direction:column;gap:16px;max-width:820px">
+        <!-- Features Card -->
+        <div class="card" style="padding:20px">
+          <div class="section-title">✨ Features</div>
+          <div class="form-col">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <span style="font-weight:600">Income Tracking</span>
+                <div style="font-size:11px;color:var(--muted)">Track income and calculate net savings</div>
+              </div>
+              <button class="btn btn-secondary" id="income-toggle-btn" onclick="toggleIncomeTracking()">Disable</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Theme & Style Card -->
         <div class="card" style="padding:20px">
           <div class="section-title">🌓 Appearance & Themes</div>
@@ -619,7 +633,7 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
           <div class="form-col">
             <div class="form-row">
               <button class="btn btn-secondary" onclick="exportCSV('expenses')">📥 Export Expenses CSV</button>
-              <button class="btn btn-secondary" onclick="exportCSV('income')">📥 Export Income CSV</button>
+              <button class="btn btn-secondary" id="export-income-btn" onclick="exportCSV('income')">📥 Export Income CSV</button>
             </div>
             <button class="btn btn-primary" onclick="window.print()">🖨️ Print Financial Report</button>
           </div>
@@ -668,6 +682,7 @@ const CAT_ICONS  = {food:'🍽️',bills:'📄',shopping:'🛍️',work:'💼',h
 const CATEGORIES = ['work','personal','shopping','bills','food','health'];
 
 let tasks=[], expenses=[], income=[], budgets={};
+let enableIncome = true;
 let editingTaskId = null;
 let editingExpId  = null;
 let pendingSubtasks = [];
@@ -706,6 +721,7 @@ function save(){
   localStorage.setItem('tr_darkmode', document.body.classList.contains('dark') ? 'true' : 'false');
   localStorage.setItem('tr_theme',    document.body.getAttribute('data-color-theme') || 'orange');
   localStorage.setItem('tr_notifs',   localStorage.getItem('tr_notifs') || 'false');
+  localStorage.setItem('tr_income_enabled', enableIncome);
 }
 function load(){
   try{ tasks    = JSON.parse(localStorage.getItem('tr_tasks')    ||'[]') || []; }catch{ tasks=[];}
@@ -714,6 +730,7 @@ function load(){
   try{ budgets  = JSON.parse(localStorage.getItem('tr_budgets')  ||'{}') || {}; }catch{ budgets={};}
   currentCurrency = localStorage.getItem('tr_currency') || 'INR';
   currentLocale   = localStorage.getItem('tr_locale') || 'en-IN';
+  enableIncome    = localStorage.getItem('tr_income_enabled') !== 'false';
   
   const dark = localStorage.getItem('tr_darkmode') === 'true';
   document.body.classList.toggle('dark', dark);
@@ -771,8 +788,8 @@ function renderDashboard(){
   statsEl.innerHTML = `
     ${statCard("Today's Spend", fmt(todayExp), 'var(--primary)', '')}
     ${statCard('This Month', fmt(curMonExp), 'var(--blue)', diff!=null?`<span style="color:${+diff>0?'var(--red)':'var(--green)'}">${+diff>0?'↑':'↓'} ${Math.abs(diff)}% vs last month</span>`:'')}
-    ${statCard('Income', fmt(curMonInc), 'var(--green)', '')}
-    ${statCard('Net Savings', fmt(netSavings), netSavings>=0?'var(--green)':'var(--red)', `<span>${netSavings>=0?'🎉 On track':'⚠️ Over income'}</span>`)}
+    ${enableIncome ? statCard('Income', fmt(curMonInc), 'var(--green)', '') : ''}
+    ${enableIncome ? statCard('Net Savings', fmt(netSavings), netSavings>=0?'var(--green)':'var(--red)', `<span>${netSavings>=0?'🎉 On track':'⚠️ Over income'}</span>`) : ''}
     ${statCard('Tasks Done', `${completedTasks}/${tasks.length}`, 'var(--purple)', overdueTasks>0?`<span style="color:var(--red)">⚠️ ${overdueTasks} overdue</span>`:'')}
   `;
 
@@ -1212,11 +1229,19 @@ function renderExpensesMonth(){
   const mInc     = monthInc.reduce((s,i)=>s+i.amount,0);
   const mNet     = mInc-mTotal;
 
-  document.getElementById('exp-month-totals').innerHTML = [['Expenses',mTotal,'var(--primary)'],['Income',mInc,'var(--green)'],['Net',mNet,mNet>=0?'var(--green)':'var(--red)']].map(([l,v,c])=>`
-    <div style="text-align:right">
-      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">${l}</div>
-      <div class="mono" style="font-size:15px;font-weight:700;color:${c}">${fmt(v)}</div>
-    </div>`).join('');
+  if (enableIncome) {
+    document.getElementById('exp-month-totals').innerHTML = [['Expenses',mTotal,'var(--primary)'],['Income',mInc,'var(--green)'],['Net',mNet,mNet>=0?'var(--green)':'var(--red)']].map(([l,v,c])=>`
+      <div style="text-align:right">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">${l}</div>
+        <div class="mono" style="font-size:15px;font-weight:700;color:${c}">${fmt(v)}</div>
+      </div>`).join('');
+  } else {
+    document.getElementById('exp-month-totals').innerHTML = `
+      <div style="text-align:right">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em">Total Expenses</div>
+        <div class="mono" style="font-size:15px;font-weight:700;color:var(--primary)">${fmt(mTotal)}</div>
+      </div>`;
+  }
 
   const catTotals = CATEGORIES.map(c=>({c,v:monthExp.filter(e=>e.category===c).reduce((s,e)=>s+e.amount,0)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
   document.getElementById('cat-bars').innerHTML = catTotals.map(({c,v})=>`
@@ -1300,10 +1325,14 @@ function renderBudget(){
 
   document.getElementById('budget-month-label').textContent = monthLabel(cur);
 
-  document.getElementById('budget-stats').innerHTML = `
+  document.getElementById('budget-stats').innerHTML = enableIncome ? `
     ${statCard('Total Income', fmt(curInc), 'var(--green)','')}
     ${statCard('Total Expenses', fmt(curExp), 'var(--primary)','')}
     ${statCard('Net Savings', fmt(curInc-curExp), curInc-curExp>=0?'var(--green)':'var(--red)','')}
+  ` : `
+    ${statCard('Total Budget', fmt(totalBudget), 'var(--blue)','')}
+    ${statCard('Total Expenses', fmt(curExp), 'var(--primary)','')}
+    ${statCard('Remaining', fmt(totalBudget-curExp), totalBudget-curExp>=0?'var(--green)':'var(--red)','')}
   `;
 
   const pct = curInc>0?Math.min((curExp/curInc)*100,100):0;
@@ -1363,6 +1392,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('e-date').value = t;
   document.getElementById('i-date').value = t;
 
+  updateIncomeVisibility();
+
   browseMonth = todayMonth();
 
   // Initialize settings options
@@ -1398,6 +1429,34 @@ window.addEventListener('DOMContentLoaded',()=>{
 // ── Settings & Advanced Features ──────────────────────────────────────────────
 function renderSettings() {
   // Empty or custom updates for settings view
+}
+
+function updateIncomeVisibility() {
+  const isInc = enableIncome;
+  const els = [
+    {id: 'add-income-card', show: isInc ? 'block' : 'none'},
+    {id: 'vbtn-income', show: isInc ? 'block' : 'none'},
+    {id: 'spending-rate-container', show: isInc ? 'block' : 'none'},
+    {id: 'export-income-btn', show: isInc ? 'inline-flex' : 'none'}
+  ];
+  els.forEach(e => {
+    const el = document.getElementById(e.id);
+    if(el) el.style.display = e.show;
+  });
+  
+  const incToggleBtn = document.getElementById('income-toggle-btn');
+  if (incToggleBtn) {
+    incToggleBtn.textContent = isInc ? 'Disable' : 'Enable';
+    incToggleBtn.className = isInc ? 'btn btn-danger' : 'btn btn-primary';
+  }
+  if (!isInc && viewMode === 'income') setViewMode('expenses');
+}
+
+function toggleIncomeTracking() {
+  enableIncome = !enableIncome;
+  save();
+  updateIncomeVisibility();
+  renderTab(currentTab);
 }
 
 function toggleDarkMode(){
