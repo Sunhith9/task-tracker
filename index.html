@@ -97,6 +97,23 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes fadeInSlide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes popIn{0%{transform:scale(0.8);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes flipUp{0%{opacity:0;transform:perspective(400px) rotateX(-20deg) translateY(20px)}100%{opacity:1;transform:perspective(400px) rotateX(0deg) translateY(0)}}
+@keyframes ripple-anim{to{transform:scale(4);opacity:0}}
+@keyframes dash{to{stroke-dashoffset:0}}
+
+/* Ripple */
+.btn { position: relative; overflow: hidden; }
+.ripple {
+  position: absolute; border-radius: 50%;
+  transform: scale(0); animation: ripple-anim 600ms linear;
+  background: rgba(255, 255, 255, 0.4); pointer-events: none;
+}
+body.dark .btn-secondary .ripple { background: rgba(255,255,255,0.1); }
+html:not(.dark) .btn-secondary .ripple { background: rgba(0,0,0,0.1); }
+
+/* Checkmark SVG drawing */
+.checkbox svg polyline { stroke-dasharray: 24; stroke-dashoffset: 24; }
+.checkbox.checked svg polyline { animation: dash 0.4s cubic-bezier(0.65, 0, 0.45, 1) forwards; }
 
 /* Layout */
 #app{min-height:100vh;display:flex;flex-direction:column}
@@ -117,7 +134,7 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
 /* Cards */
 .card{background:var(--card);border-radius:var(--radius);border:1.5px solid var(--border);box-shadow:0 2px 12px rgba(0,0,0,.05);transition:transform 0.2s ease, box-shadow 0.2s ease}
 .card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
-.stat-card{background:var(--card);border-radius:12px;padding:16px 18px;border:1.5px solid var(--border);border-top:3px solid var(--primary)}
+.stat-card{background:var(--card);border-radius:12px;padding:16px 18px;border:1.5px solid var(--border);border-top:3px solid var(--primary);animation:flipUp 0.6s cubic-bezier(0.34,1.56,0.64,1) both}
 .stat-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .stat-value{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--text)}
 .stat-sub{margin-top:4px;font-size:11px;color:var(--muted)}
@@ -176,12 +193,15 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
 .two-col .right-panel{display:flex;flex-direction:column;gap:12px}
 
 /* Task card */
-.task-card{border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--card);transition:all 0.2s ease;user-select:none;animation:popIn 0.3s ease-out both}
+.task-card{border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--card);transition:all 0.2s ease;user-select:none;animation:popIn 0.3s ease-out both;position:relative}
 .task-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.05);border-color:var(--primary)}
 .task-card.done{background:#f5fbf7}
 .task-card.overdue{background:#fdf5f5;border-color:#f5c0c0}
 .task-card.selected{outline:2px solid var(--primary);border-color:var(--primary)}
 .task-card.dragging{opacity:0.4;border:1.5px dashed var(--primary)}
+.task-card.priority-high{border-left:4px solid var(--red)}
+.task-card.priority-med{border-left:4px solid var(--gold)}
+.task-card.priority-low{border-left:4px solid var(--green)}
 
 /* Expense card */
 .exp-card{border:1.5px solid var(--border);border-radius:10px;padding:13px;background:var(--card);transition:all 0.2s ease;animation:popIn 0.3s ease-out both}
@@ -299,6 +319,30 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
     <!-- DASHBOARD -->
     <div id="tab-dashboard" class="tab-panel active">
       <div class="stats-grid" id="dash-stats"></div>
+      
+      <!-- New Features Row -->
+      <div class="charts-grid" style="grid-template-columns: 1fr 2fr; margin-bottom:18px">
+        <div class="card stat-card" style="padding:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; animation-delay: 0.5s;">
+          <div class="section-title" style="align-self:flex-start; margin-bottom: 0;">🎯 Weekly Goal</div>
+          <div style="position:relative; width:100px; height:100px; margin: 15px 0;">
+            <svg viewBox="0 0 36 36" style="width:100%; height:100%; transform: rotate(-90deg);">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--border)" stroke-width="3" />
+              <path id="weekly-goal-ring" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--primary)" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);" stroke-linecap="round" />
+            </svg>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <span id="weekly-goal-pct" style="font-size:18px; font-weight:700; font-family:'DM Mono',monospace;">0%</span>
+            </div>
+          </div>
+          <div id="weekly-goal-text" style="font-size:12px; color:var(--muted); text-align:center;">0 / 0 spent</div>
+        </div>
+        
+        <div class="card stat-card" style="padding:18px; display:flex; flex-direction:column; animation-delay: 0.6s;">
+          <div class="section-title">🤖 AI Insights</div>
+          <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--input-bg); border-radius:12px; border:1px solid var(--border);">
+            <div id="ai-insights-text" style="font-size:14px; line-height:1.6; color:var(--text); font-weight:500; text-align:center;">Analyzing your spending...</div>
+          </div>
+        </div>
+      </div>
       <div class="charts-grid">
         <div class="card" style="padding:18px">
           <div class="section-title">📈 6-Month Expense Trend</div>
@@ -560,6 +604,28 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
               </div>
               <button class="btn btn-secondary" id="income-toggle-btn" onclick="toggleIncomeTracking()">Disable</button>
             </div>
+            <div style="display:flex;align-items:center;justify-content:space-between; margin-top:15px; padding-top:15px; border-top:1px solid var(--border)">
+              <div>
+                <span style="font-weight:600">Weekly Goal</span>
+                <div style="font-size:11px;color:var(--muted)">Set a spending limit for the week</div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="s-weekly-goal" placeholder="Amount" style="width:100px; padding:6px" />
+                <button class="btn btn-primary btn-sm" onclick="saveWeeklyGoal()">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories Card -->
+        <div class="card" style="padding:20px">
+          <div class="section-title">🏷️ Custom Categories</div>
+          <div class="form-col" id="settings-categories-list"></div>
+          <div style="display:flex; gap:6px; margin-top:12px;">
+            <input type="text" id="s-new-cat" placeholder="Name" style="flex:1" />
+            <input type="text" id="s-new-cat-emoji" placeholder="Emoji" style="width:60px" />
+            <input type="color" id="s-new-cat-color" value="#d4622a" style="width:40px; padding:0; height:36px; border:none; border-radius:var(--radius-sm); cursor:pointer;" />
+            <button class="btn btn-primary" onclick="addCustomCategory()">Add</button>
           </div>
         </div>
 
@@ -676,10 +742,11 @@ label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase
 
 <script>
 // ── Data ─────────────────────────────────────────────────────────────────────
-const CAT_COLORS = {work:'#2a7dd4',personal:'#2a9d5c',shopping:'#d4a02a',bills:'#d42a2a',food:'#d4622a',health:'#7a2ad4'};
-const CAT_BG     = {work:'#e0eef5',personal:'#e0f5ea',shopping:'#fef3d8',bills:'#fde8e8',food:'#fdf0e0',health:'#ede0f5'};
-const CAT_ICONS  = {food:'🍽️',bills:'📄',shopping:'🛍️',work:'💼',health:'💊',personal:'👤'};
-const CATEGORIES = ['work','personal','shopping','bills','food','health'];
+let CAT_COLORS = {work:'#2a7dd4',personal:'#2a9d5c',shopping:'#d4a02a',bills:'#d42a2a',food:'#d4622a',health:'#7a2ad4'};
+let CAT_BG     = {work:'#e0eef5',personal:'#e0f5ea',shopping:'#fef3d8',bills:'#fde8e8',food:'#fdf0e0',health:'#ede0f5'};
+let CAT_ICONS  = {food:'🍽️',bills:'📄',shopping:'🛍️',work:'💼',health:'💊',personal:'👤'};
+let CATEGORIES = ['work','personal','shopping','bills','food','health'];
+let weeklyGoal = 0;
 
 let tasks=[], expenses=[], income=[], budgets={};
 let enableIncome = true;
@@ -722,6 +789,11 @@ function save(){
   localStorage.setItem('tr_theme',    document.body.getAttribute('data-color-theme') || 'orange');
   localStorage.setItem('tr_notifs',   localStorage.getItem('tr_notifs') || 'false');
   localStorage.setItem('tr_income_enabled', enableIncome);
+  localStorage.setItem('tr_categories', JSON.stringify(CATEGORIES));
+  localStorage.setItem('tr_cat_colors', JSON.stringify(CAT_COLORS));
+  localStorage.setItem('tr_cat_bg', JSON.stringify(CAT_BG));
+  localStorage.setItem('tr_cat_icons', JSON.stringify(CAT_ICONS));
+  localStorage.setItem('tr_weekly_goal', weeklyGoal);
 }
 function load(){
   try{ tasks    = JSON.parse(localStorage.getItem('tr_tasks')    ||'[]') || []; }catch{ tasks=[];}
@@ -731,6 +803,12 @@ function load(){
   currentCurrency = localStorage.getItem('tr_currency') || 'INR';
   currentLocale   = localStorage.getItem('tr_locale') || 'en-IN';
   enableIncome    = localStorage.getItem('tr_income_enabled') !== 'false';
+  weeklyGoal      = parseFloat(localStorage.getItem('tr_weekly_goal')) || 0;
+  
+  try{ const c = JSON.parse(localStorage.getItem('tr_categories')); if(c && c.length) CATEGORIES=c; }catch{}
+  try{ const c = JSON.parse(localStorage.getItem('tr_cat_colors')); if(c) CAT_COLORS=c; }catch{}
+  try{ const c = JSON.parse(localStorage.getItem('tr_cat_bg')); if(c) CAT_BG=c; }catch{}
+  try{ const c = JSON.parse(localStorage.getItem('tr_cat_icons')); if(c) CAT_ICONS=c; }catch{}
   
   const dark = localStorage.getItem('tr_darkmode') === 'true';
   document.body.classList.toggle('dark', dark);
@@ -793,6 +871,45 @@ function renderDashboard(){
     ${statCard('Tasks Done', `${completedTasks}/${tasks.length}`, 'var(--purple)', overdueTasks>0?`<span style="color:var(--red)">⚠️ ${overdueTasks} overdue</span>`:'')}
   `;
 
+  // Weekly goal
+  const todDate = new Date();
+  const day = todDate.getDay();
+  const diffToMonday = todDate.getDate() - day + (day === 0 ? -6 : 1);
+  const mondayDate = new Date(todDate.setDate(diffToMonday));
+  const monday = mondayDate.toISOString().split('T')[0];
+  const weeklyExp = expenses.filter(e => e.date >= monday && e.date <= tod).reduce((s, e) => s + e.amount, 0);
+  
+  if (weeklyGoal > 0) {
+    const pct = Math.min((weeklyExp / weeklyGoal) * 100, 100);
+    document.getElementById('weekly-goal-pct').textContent = pct.toFixed(0) + '%';
+    const offset = 100 - pct;
+    document.getElementById('weekly-goal-ring').style.strokeDashoffset = offset;
+    document.getElementById('weekly-goal-ring').style.stroke = pct >= 100 ? 'var(--red)' : 'var(--primary)';
+    document.getElementById('weekly-goal-text').textContent = `${fmt(weeklyExp)} / ${fmt(weeklyGoal)} spent`;
+  } else {
+    document.getElementById('weekly-goal-pct').textContent = '0%';
+    document.getElementById('weekly-goal-ring').style.strokeDashoffset = 100;
+    document.getElementById('weekly-goal-ring').style.stroke = 'var(--muted)';
+    document.getElementById('weekly-goal-text').textContent = 'Set a goal in settings';
+  }
+
+  // AI Insights
+  const aiEl = document.getElementById('ai-insights-text');
+  if (curMonExp === 0) {
+    aiEl.textContent = "Add some expenses to get personalized financial insights!";
+  } else {
+    const catTotals = CATEGORIES.map(c => ({c, v: expenses.filter(e => monthKey(e.date)===cur && e.category === c).reduce((s, e) => s + e.amount, 0)})).sort((a,b) => b.v - a.v);
+    const topCat = catTotals[0];
+    const budget = budgets[topCat.c] || 0;
+    if (budget > 0 && topCat.v > budget) {
+      aiEl.innerHTML = `You've exceeded your <b style="text-transform:capitalize">${topCat.c}</b> budget by <span style="color:var(--red)">${fmt(topCat.v - budget)}</span>. Consider cutting back on ${topCat.c} for the rest of the month.`;
+    } else if (topCat.v > curMonExp * 0.4) {
+      aiEl.innerHTML = `You're spending <b>${((topCat.v / curMonExp) * 100).toFixed(0)}%</b> of your expenses on <b style="text-transform:capitalize">${topCat.c}</b>. Try balancing your spending.`;
+    } else {
+      aiEl.textContent = "Your spending looks well-balanced this month. Keep up the good work!";
+    }
+  }
+
   const isDark = document.body.classList.contains('dark');
   const gridColor = isDark ? '#2e2a24' : '#f0ede8';
   const textColor = isDark ? '#a39c95' : '#6b6560';
@@ -813,7 +930,15 @@ function renderDashboard(){
   gradient.addColorStop(0, `rgba(${accentRgb}, 0.5)`);
   gradient.addColorStop(1, `rgba(${accentRgb}, 0.0)`);
   
-  lineChart = new Chart(lCtx,{type:'line',data:{labels:months6.map(m=>m.name),datasets:[{data:months6.map(m=>m.total),borderColor:themePrimary,backgroundColor:gradient,tension:.45,pointBackgroundColor:themePrimary,pointBorderColor:'#fff',pointHoverBackgroundColor:'#fff',pointHoverBorderColor:themePrimary,pointRadius:4,pointHoverRadius:6,borderWidth:2.5,fill:true}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:isDark?'rgba(28,26,23,0.9)':'rgba(255,255,255,0.9)',titleColor:isDark?'#f5f4f0':'#1a1814',bodyColor:isDark?'#a39c95':'#6b6560',borderColor:isDark?'#2e2a24':'#e2ddd6',borderWidth:1,padding:10,boxPadding:4,usePointStyle:true,callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{x:{grid:{display:false},ticks:{color:textColor,font:{family:'DM Sans',size:11}}},y:{grid:{color:gridColor,drawBorder:false},ticks:{color:textColor,font:{family:'DM Mono',size:10},callback:v=>fmt(v)}}}}});
+  const totalDuration = 800;
+  const delayBetweenPoints = totalDuration / months6.length;
+  const previousY = (ctx) => ctx.index === 0 ? ctx.chart.scales.y.getPixelForValue(100) : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1].getProps(['y'], true).y;
+  const lineAnim = {
+    x: { type: 'number', easing: 'linear', duration: delayBetweenPoints, from: NaN, delay(ctx) { if (ctx.type !== 'data' || ctx.xStarted) return 0; ctx.xStarted = true; return ctx.index * delayBetweenPoints; } },
+    y: { type: 'number', easing: 'linear', duration: delayBetweenPoints, from: previousY, delay(ctx) { if (ctx.type !== 'data' || ctx.yStarted) return 0; ctx.yStarted = true; return ctx.index * delayBetweenPoints; } }
+  };
+  
+  lineChart = new Chart(lCtx,{type:'line',data:{labels:months6.map(m=>m.name),datasets:[{data:months6.map(m=>m.total),borderColor:themePrimary,backgroundColor:gradient,tension:.45,pointBackgroundColor:themePrimary,pointBorderColor:'#fff',pointHoverBackgroundColor:'#fff',pointHoverBorderColor:themePrimary,pointRadius:4,pointHoverRadius:6,borderWidth:2.5,fill:true}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},animation:lineAnim,plugins:{legend:{display:false},tooltip:{backgroundColor:isDark?'rgba(28,26,23,0.9)':'rgba(255,255,255,0.9)',titleColor:isDark?'#f5f4f0':'#1a1814',bodyColor:isDark?'#a39c95':'#6b6560',borderColor:isDark?'#2e2a24':'#e2ddd6',borderWidth:1,padding:10,boxPadding:4,usePointStyle:true,callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{x:{grid:{display:false},ticks:{color:textColor,font:{family:'DM Sans',size:11}}},y:{grid:{color:gridColor,drawBorder:false},ticks:{color:textColor,font:{family:'DM Mono',size:10},callback:v=>fmt(v)}}}}});
 
   // Pie chart
   const catData = CATEGORIES.map(c=>({name:c.charAt(0).toUpperCase()+c.slice(1), value:expenses.filter(e=>monthKey(e.date)===cur&&e.category===c).reduce((s,e)=>s+e.amount,0), color:CAT_COLORS[c]})).filter(x=>x.value>0);
@@ -822,7 +947,7 @@ function renderDashboard(){
   const pCtx = document.getElementById('chart-pie').getContext('2d');
   if(catData.length>0){
     document.getElementById('chart-pie').style.display='block';
-    pieChart = new Chart(pCtx,{type:'doughnut',data:{labels:catData.map(c=>c.name),datasets:[{data:catData.map(c=>c.value),backgroundColor:catData.map(c=>c.color),borderWidth:2,borderColor:isDark?'#1c1a17':'#fff',hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{position:'bottom',labels:{color:textColor,font:{family:'DM Sans',size:11},boxWidth:9,usePointStyle:true,padding:20}},tooltip:{backgroundColor:isDark?'rgba(28,26,23,0.9)':'rgba(255,255,255,0.9)',bodyColor:isDark?'#f5f4f0':'#1a1814',borderColor:isDark?'#2e2a24':'#e2ddd6',borderWidth:1,padding:10,callbacks:{label:ctx=>' '+fmt(ctx.raw)}}}}});
+    pieChart = new Chart(pCtx,{type:'doughnut',data:{labels:catData.map(c=>c.name),datasets:[{data:catData.map(c=>c.value),backgroundColor:catData.map(c=>c.color),borderWidth:2,borderColor:isDark?'#1c1a17':'#fff',hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',animation:{animateScale:true,animateRotate:true,duration:1000,easing:'easeOutQuart'},plugins:{legend:{position:'bottom',labels:{color:textColor,font:{family:'DM Sans',size:11},boxWidth:9,usePointStyle:true,padding:20}},tooltip:{backgroundColor:isDark?'rgba(28,26,23,0.9)':'rgba(255,255,255,0.9)',bodyColor:isDark?'#f5f4f0':'#1a1814',borderColor:isDark?'#2e2a24':'#e2ddd6',borderWidth:1,padding:10,callbacks:{label:ctx=>' '+fmt(ctx.raw)}}}}});
   } else {
     document.getElementById('chart-pie').style.display='none';
   }
@@ -834,7 +959,7 @@ function renderDashboard(){
     <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-radius:8px;background:var(--input-bg);margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:9px">
         <span style="font-size:13px;font-weight:600;color:${t.status==='completed'?'var(--muted)':'var(--text)'};text-decoration:${t.status==='completed'?'line-through':'none'}">${esc(t.title)}</span>
-        <span class="tag tag-${t.priority}">${t.priority}</span>
+        <span class="tag tag-${t.priority||'low'}">${t.priority||'low'}</span>
       </div>
       <span class="tag tag-blue">${t.status}</span>
     </div>`).join('');
@@ -1059,13 +1184,14 @@ function renderTasks(){
         ${subs.map((s,i)=>`
         <div onclick="toggleSubtask('${task.id}',${i})" style="display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:6px;cursor:pointer">
           <div class="checkbox checkbox-sm ${s.done?'checked':''}" style="${s.done?'border-color:var(--green);background:var(--green)':''}">
-            ${s.done?'<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <span style="font-size:12px;color:${s.done?'var(--muted)':'var(--text)'};text-decoration:${s.done?'line-through':'none'}">${esc(s.text)}</span>
         </div>`).join('')}
       </div>` : '';
+    const priority = task.priority || 'low';
     return `
-    <div class="task-card ${task.status==='completed'?'done':''} ${isOverdue?'overdue':''} ${isSel?'selected':''}" 
+    <div class="task-card priority-${priority} ${task.status==='completed'?'done':''} ${isOverdue?'overdue':''} ${isSel?'selected':''}" 
          style="animation-delay:${idx*0.05}s; ${isSel?'outline:2px solid var(--primary);border-color:var(--primary)':''}"
          draggable="true" 
          ondragstart="drag(event, '${task.id}')" 
@@ -1073,10 +1199,10 @@ function renderTasks(){
          ondrop="drop(event, '${task.id}')">
       <div style="display:flex;align-items:flex-start;gap:9px">
         <div class="checkbox ${isSel?'checked':''}" onclick="toggleSelect('${task.id}')" style="${isSel?'border-color:var(--primary);background:var(--primary)':''}">
-          ${isSel?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
         <div class="checkbox ${task.status==='completed'?'checked':''}" onclick="toggleTask('${task.id}')" style="${task.status==='completed'?'border-color:var(--green);background:var(--green)':''}">
-          ${task.status==='completed'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
@@ -1380,6 +1506,53 @@ function clearBudget(cat){
   delete budgets[cat]; save(); renderBudget(); showToast('Budget cleared');
 }
 
+// ── Settings & Customization ─────────────────────────────────────────────────
+function saveWeeklyGoal() {
+  const v = parseFloat(document.getElementById('s-weekly-goal').value);
+  if(!v||v<=0){ showToast('Enter a valid weekly goal amount'); return; }
+  weeklyGoal = v; save(); renderTab(currentTab); showToast('Weekly goal set ✓');
+}
+
+function renderSettingsCategories() {
+  document.getElementById('settings-categories-list').innerHTML = CATEGORIES.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">${CAT_ICONS[c] || '🏷️'}</span>
+        <span style="font-weight:500;text-transform:capitalize">${c}</span>
+        <div style="width:12px;height:12px;border-radius:50%;background:${CAT_COLORS[c]}"></div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteCustomCategory('${c}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+function addCustomCategory() {
+  const name = document.getElementById('s-new-cat').value.trim().toLowerCase();
+  const emoji = document.getElementById('s-new-cat-emoji').value.trim() || '🏷️';
+  const color = document.getElementById('s-new-cat-color').value;
+  if(!name) { showToast('Enter a category name'); return; }
+  if(CATEGORIES.includes(name)) { showToast('Category already exists'); return; }
+  
+  CATEGORIES.push(name);
+  CAT_COLORS[name] = color;
+  CAT_BG[name] = color + '22'; // simple opacity
+  CAT_ICONS[name] = emoji;
+  
+  document.getElementById('s-new-cat').value = '';
+  document.getElementById('s-new-cat-emoji').value = '';
+  
+  save(); renderSettingsCategories(); showToast('Category added ✓');
+}
+
+function deleteCustomCategory(cat) {
+  if(CATEGORIES.length <= 1) { showToast('Cannot delete the last category'); return; }
+  CATEGORIES = CATEGORIES.filter(c => c !== cat);
+  delete CAT_COLORS[cat];
+  delete CAT_BG[cat];
+  delete CAT_ICONS[cat];
+  save(); renderSettingsCategories(); showToast('Category removed');
+}
+
 // ── Utils ────────────────────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -1428,7 +1601,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 // ── Settings & Advanced Features ──────────────────────────────────────────────
 function renderSettings() {
-  // Empty or custom updates for settings view
+  document.getElementById('s-weekly-goal').value = weeklyGoal || '';
+  renderSettingsCategories();
 }
 
 function updateIncomeVisibility() {
