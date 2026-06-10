@@ -701,10 +701,10 @@ function save(){
   localStorage.setItem('tr_notifs',   localStorage.getItem('tr_notifs') || 'false');
 }
 function load(){
-  try{ tasks    = JSON.parse(localStorage.getItem('tr_tasks')    ||'[]'); }catch{ tasks=[];}
-  try{ expenses = JSON.parse(localStorage.getItem('tr_expenses') ||'[]'); }catch{ expenses=[];}
-  try{ income   = JSON.parse(localStorage.getItem('tr_income')   ||'[]'); }catch{ income=[];}
-  try{ budgets  = JSON.parse(localStorage.getItem('tr_budgets')  ||'{}'); }catch{ budgets={};}
+  try{ tasks    = JSON.parse(localStorage.getItem('tr_tasks')    ||'[]') || []; }catch{ tasks=[];}
+  try{ expenses = JSON.parse(localStorage.getItem('tr_expenses') ||'[]') || []; }catch{ expenses=[];}
+  try{ income   = JSON.parse(localStorage.getItem('tr_income')   ||'[]') || []; }catch{ income=[];}
+  try{ budgets  = JSON.parse(localStorage.getItem('tr_budgets')  ||'{}') || {}; }catch{ budgets={};}
   currentCurrency = localStorage.getItem('tr_currency') || 'INR';
   currentLocale   = localStorage.getItem('tr_locale') || 'en-IN';
   
@@ -784,7 +784,7 @@ function renderDashboard(){
   
   const themePrimary = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#d4622a';
   
-  lineChart = new Chart(lCtx,{type:'line',data:{labels:months6.map(m=>m.name),datasets:[{data:months6.map(m=>m.total),borderColor:themePrimary,backgroundColor:'rgba(var(--accent-rgb),.08)',tension:.35,pointBackgroundColor:themePrimary,pointRadius:4,borderWidth:2.5,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{x:{grid:{display:false},ticks:{color:textColor,font:{family:'DM Sans',size:11}}},y:{grid:{color:gridColor},ticks:{color:textColor,font:{family:'DM Mono',size:10},callback:v=>fmt(v)}}}});
+  lineChart = new Chart(lCtx,{type:'line',data:{labels:months6.map(m=>m.name),datasets:[{data:months6.map(m=>m.total),borderColor:themePrimary,backgroundColor:'rgba(var(--accent-rgb),.08)',tension:.35,pointBackgroundColor:themePrimary,pointRadius:4,borderWidth:2.5,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{x:{grid:{display:false},ticks:{color:textColor,font:{family:'DM Sans',size:11}}},y:{grid:{color:gridColor},ticks:{color:textColor,font:{family:'DM Mono',size:10},callback:v=>fmt(v)}}}}});
 
   // Pie chart
   const catData = CATEGORIES.map(c=>({name:c.charAt(0).toUpperCase()+c.slice(1), value:expenses.filter(e=>monthKey(e.date)===cur&&e.category===c).reduce((s,e)=>s+e.amount,0), color:CAT_COLORS[c]})).filter(x=>x.value>0);
@@ -1505,7 +1505,7 @@ function exportCSV(type) {
 
 function exportBackup() {
   const data = {
-    version: 2.0,
+    version: 3.0,
     tasks,
     expenses,
     income,
